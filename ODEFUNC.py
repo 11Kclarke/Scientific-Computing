@@ -5,6 +5,8 @@ from sympy.utilities.lambdify import lambdify
 import matplotlib.pyplot as plt
 from scipy.integrate import odeint 
 from inspect import isfunction
+from scipy.optimize import fsolve
+from scipy.integrate import solve_ivp
 x,y,t = sp.symbols('x,y,t', real=True)
 
 def euler_step(dxdt,x,stepsize,t=0):
@@ -96,7 +98,6 @@ def Solve_to(f,x0,t0,tn,deltat_max=0.001,method=rk4step,initialvalue = True ,t_i
     return  (Solve_ode(f,tvals,x0,method=method),tvals)
     
 def dx_dt(t, X):
-    
     X_dot = np.array([X[1], -X[0]])
     return X_dot
 
@@ -112,27 +113,68 @@ def dx_dt2(t, X, a=0.1, b=0.1, d=0.1):
     dXdt = np.array([dxdt, dydt])
     return dXdt
 
+def findcycle(t,X,f,T=(2*np.pi)):
+    #start = Solve_to(f,X,)
+    #G=sp.lamdify([f,t,X],-f(t+period,X),dummify = True)
+
+    def G(x0,T=T):
+        
+        t_array = [0,T]
+    #x_array = solve_ode_system(mass_spring,x0,t_array,const,deltat_max,'rc4th')
+        x_array = solve_ivp(f,(t_array[0],t_array[1]),x0,max_step = 0.1)
+
+        return x0-x_array.y[:,-1]
+    return fsolve(G,X)
   
+def mass_spring(t,x,const = [1,1,1,1,1]):
+    m=const[0]
+    gamma=const[1]
+    w=const[2]
+    c=const[3]
+    k=const[4]
+    dx1 = x[1]
+    dx2 = (1/m)*(gamma*np.sin(w*t)-(c*x[1])-(k*x[0]))
+    return np.array([dx1,dx2])
 
 if __name__ == "__main__":
     #(x+5)*(x+1)*(x+3)**2
+    """print("start")
+    print(dx_dt3(0,[0,1]))
+    print(type(dx_dt3(0,[0,1])))
+    dx_dt=sp.lambdify((t,[x,y]),sp.Matrix([x,-y]),modules="numpy")
+    print(dx_dt(0,[0,1]))
+    print(type(dx_dt(0,[0,1])))
+    print("end")
     f=sp.lambdify([x,t],(x+1)**2)
     h=sp.lambdify([x,t],t)
     
     g = sp.lambdify([x,t],-x**2)
-    f=[h,g]
+    f=[h,g]"""
+    #dx_dt=sp.lambdify([x,t],(x,-x))
     #dx_dt(0,)
-    a=Solve_to(dx_dt2,[0,1],np.pi,3*np.pi)
+    #a=Solve_to(mass_spring,[1,1],1,5)
     #print(np.shape(a))
-    (xvals,tvals)=a
+    #(xvals,tvals)=a
     
-    print(np.shape(xvals))
-    print(np.shape(tvals))
+    #print(np.shape(xvals))
+    #print(np.shape(tvals))
     #print(tvals[-1])
     
-   
-    plt.plot(xvals[:,1])
-
+    #a = findcycle(1,[0,1],mass_spring)
+    #print(a)
+    #print(type(a))
+    #(xvals,tvals)=Solve_to(mass_spring,[1,1],-2*np.pi,2*np.pi)
+    fig, axs = plt.subplots(2)
+    sol = solve_ivp(dx_dt,(0,4*np.pi),[1,1],max_step = 0.1)
+    (xvals,tvals)=Solve_to(dx_dt,[1,1],0,4*np.pi)
+    axs[0].plot(sol.t,sol.y[0,:])
+    axs[0].plot(sol.t,sol.y[1,:])
+    axs[1].plot(tvals,xvals[:,1])
+    axs[1].plot(tvals,xvals[:,0])
+    
+    """
+    Solve to broken for t dependent
+    """
     plt.grid()
     #original = f(tvals,0)
 
