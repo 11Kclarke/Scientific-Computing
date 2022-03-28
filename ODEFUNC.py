@@ -9,7 +9,7 @@ from scipy.optimize import fsolve
 from scipy.integrate import solve_ivp
 x,y,t = sp.symbols('x,y,t', real=True)
 
-def euler_step(dxdt,x,stepsize,t=0):
+def euler_step(dxdt,x,stepsize,t):
     #print(t)
     return dxdt(t,x)*stepsize
 
@@ -23,7 +23,7 @@ def euler_solve(f,y0,tvals):
     
     return sol
 
-def rk4step(f,x,stepsize,t=0):
+def rk4step(f,x,stepsize,t):
     h=stepsize
     k1 = h*f(t,x)
     k2 = h*f(t+h/2,x+h*k1/2)
@@ -60,7 +60,7 @@ def Solve_ode(f,tvals,y0,method=rk4step):
     print(sol[0])
     #print(f)
     for i in range(steps-1):
-        sol[i+1]=method(f,sol[i],tvals[i]-tvals[i+1],t=tvals[i])+sol[i]
+        sol[i+1]=method(f,sol[i],tvals[i]-tvals[i+1],tvals[i])+sol[i]
     return sol
 
 
@@ -98,7 +98,7 @@ def Solve_to(f,x0,t0,tn,deltat_max=0.001,method=rk4step,initialvalue = True ,t_i
     return  (Solve_ode(f,tvals,x0,method=method),tvals)
     
 def dx_dt(t, X):
-    X_dot = np.array([X[1], -X[0]])
+    X_dot = np.array([X[1]-t, -X[0]+t])
     return X_dot
 
 
@@ -121,7 +121,7 @@ def findcycle(t,X,f,T=(2*np.pi)):
         
         t_array = [0,T]
     #x_array = solve_ode_system(mass_spring,x0,t_array,const,deltat_max,'rc4th')
-        x_array = solve_ivp(f,(t_array[0],t_array[1]),x0,max_step = 0.1)
+        x_array = solve_ivp(f,(t_array[0],t_array[1]),x0,max_step = 0.001)
 
         return x0-x_array.y[:,-1]
     return fsolve(G,X)
@@ -165,7 +165,7 @@ if __name__ == "__main__":
     #print(type(a))
     #(xvals,tvals)=Solve_to(mass_spring,[1,1],-2*np.pi,2*np.pi)
     fig, axs = plt.subplots(2)
-    sol = solve_ivp(dx_dt,(0,4*np.pi),[1,1],max_step = 0.1)
+    sol = solve_ivp(dx_dt,(0,4*np.pi),[1,1],max_step = 0.001)
     (xvals,tvals)=Solve_to(dx_dt,[1,1],0,4*np.pi)
     axs[0].plot(sol.t,sol.y[0,:])
     axs[0].plot(sol.t,sol.y[1,:])
