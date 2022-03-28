@@ -42,18 +42,31 @@ def rk4(f,tvals,y0):
         sol[i+1]=rk4step(f,tvals[i],tvals[i]-tvals[i+1])+sol[i]
     return sol
 
-def Solve_ode(f,tvals,y0,method=euler_step):
+def Solve_ode(f,tvals,y0,method=euler_step,event=None):
     steps = len(tvals)
     print(y0)
     sol = np.zeros(shape=(len(y0),steps)).T  
     sol[0]=y0
+    if event != None:
+        sign = np.sign(event(y0,tvals[0]))
+        eventT=[]
+        for i in range(steps-1):
+            sol[i+1]=method(f,sol[i],tvals[i+1]-tvals[i],tvals[i])+sol[i]
+            if np.sign(event(sol[i+1],tvals[i])) != sign:
+                sign=np.sign(event(sol[i+1],tvals[i]))#if event has sign change event must have happened
+                inbetweensteps = Solve_to(f,sol[i],tvals[i],tvals[i+1],deltat_max=1*10**(-16),method=rk4step)#replace deltattmax with maximum effective accuraccy 
+                #Solves ode between steps at maximum accuracy to find more exact event locations
+                for i in inbetweensteps:
+                    if abs(i[0])<1*10**(-15):
+                        eventT.append(i[1])
+        return sol,eventT    
     for i in range(steps-1):
-        print(tvals[i+1])
         sol[i+1]=method(f,sol[i],tvals[i+1]-tvals[i],tvals[i])+sol[i]
+    
     return sol
 
 
-def Solve_to(f,x0,t0,tn,deltat_max=0.01,method=rk4step,initialvalue = True ,t_innitial_condition = None):
+def Solve_to(f,x0,t0,tn,deltat_max=0.01,method=rk4step,initialvalue = True ,t_innitial_condition = None,event=None):
     if type(f)==str:
         f= sp.lambdify([x,t],sp.parse_expr(f))
     
@@ -104,7 +117,7 @@ def Solve_to(f,x0,t0,tn,deltat_max=0.01,method=rk4step,initialvalue = True ,t_in
 
     print(np.shape(tvals))
    
-    return  (Solve_ode(f,tvals,x0,method=method),tvals)
+    return  (Solve_ode(f,tvals,x0,method=method,event=event),tvals)
     
 def dx_dt(t, X):
     X_dot = np.array([X[1]-t, -X[0]+t])
@@ -122,18 +135,6 @@ def dx_dt2(t, X, a=0.2, b=0.1, d=0.4):
     dXdt = np.array([dxdt, dydt])
     return dXdt
 
-def findcycle(X,f,T=(2*np.pi)):
-    #start = Solve_to(f,X,)
-    #G=sp.lamdify([f,t,X],-f(t+period,X),dummify = True)
-
-    def G(x0,T=T):
-        
-        t_array = [0,T]
-    #x_array = solve_ode_system(mass_spring,x0,t_array,const,deltat_max,'rc4th')
-        x_array = solve_ivp(f,(t_array[0],t_array[1]),x0,max_step = 0.01)
-
-        return x0-x_array.y[:,-1]
-    return fsolve(G,X)
 
 def findcycle(X,f,t0=0,period=None,phasecond=lambda  y : y[1]):
     if period == None:
@@ -176,8 +177,8 @@ if __name__ == "__main__":
     print(sol.y[:,0])
     axs[0].plot(sol.t,sol.y[1,:])
     axs[0].plot(sol.t,sol.y[0,:])
-    axs[1].plot(tvals,xvals[:,1])
-    axs[1].plot(tvals,xvals[:,0])
+    axs[1].plot(xvals[:,0],xvals[:,1])
+    #axs[1].plot(tvals,xvals[:,1])
     
     """
     Solve to broken for t dependent
