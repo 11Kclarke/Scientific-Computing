@@ -135,22 +135,13 @@ def findcycle(X,f,T=(2*np.pi)):
         return x0-x_array.y[:,-1]
     return fsolve(G,X)
 
-def findcycle(X,f,t0=0,period=None):
-    
-    
-    """
-    event = lambda t , y : y[0]
-    event.terminal = True
-    phasecondition = solve_ivp(f,(t_array[0],t_array[1]),X,max_step = 0.01,events=event)
-    twhen0=phasecondition.t_events
-    print(twhen0)
-    
-    """
+def findcycle(X,f,t0=0,period=None,phasecond=lambda  y : y[1]):
     if period == None:
-        def G(x0,t0=0):
+        def G(x0,t0=0,phasecond=phasecond):
             tn= x0[0]
+            phasecond=phasecond(x0)
             x_array = solve_ivp(f,(t0,tn),x0[1:],max_step = 0.01)
-            return np.append(x0[1:]-x_array.y[:,-1],x0[1])
+            return np.append(x0[1:]-x_array.y[:,-1],phasecond)
     else:     
         def G(x0,T=period):
         
