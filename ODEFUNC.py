@@ -8,23 +8,12 @@ from inspect import isfunction
 from scipy.optimize import fsolve
 from scipy.integrate import solve_ivp
 import inspect
+
+from zmq import MAX_SOCKETS
 x,y,t = sp.symbols('x,y,t', real=True)
 
 def euler_step(dxdt,x,stepsize,t):
-    
-    
     return dxdt(t,x)*stepsize
-
-
-def euler_solve(f,y0,tvals):
-    steps = len(tvals)
-    sol=np.zeros(steps) 
-    sol[0]=y0
-    for i in range(steps):
-        sol[i+1]=sol[i]+euler_step(f,tvals[i+1],tvals[i]-tvals[i+1])
-    
-    return sol
-
 def rk4step(f,x,stepsize,t):
     
     h=stepsize
@@ -34,13 +23,6 @@ def rk4step(f,x,stepsize,t):
     k4 = h*f(t+h,x+h*k3)
     return 1/6*(k1+2*k2+2*k3+k4)
        
-def rk4(f,tvals,y0):
-    steps = len(tvals)
-    sol = np.zeros(steps)
-    sol[0]=y0
-    for i in range(steps):        
-        sol[i+1]=rk4step(f,tvals[i],tvals[i]-tvals[i+1])+sol[i]
-    return sol
 
 def Solve_ode(f,tvals,y0,method=euler_step,event=None):
     steps = len(tvals)
@@ -67,20 +49,10 @@ def Solve_ode(f,tvals,y0,method=euler_step,event=None):
 
 
 def Solve_to(f,x0,t0,tn,deltat_max=0.01,method=rk4step,initialvalue = True ,t_innitial_condition = None,event=None):
+    
     if type(f)==str:
         f= sp.lambdify([x,t],sp.parse_expr(f))
     
-    """
-    if not isfunction(f):#attempts to parse function if input isnt already func
-     try:
-            if len(f)>1  and len(x0)==len(f):
-                sols=[]
-                for i in range(len(f)):
-                    sols.append(Solve_to(f[i],x0[i],t0,tn))
-                return sols
-        #except:
-                #raise "f is not function, iterable of function, or iterable of string represntation of function" 
-    """
     if abs(deltat_max)>abs(t0-tn):
         raise "max step size larger than t range"
         
@@ -119,21 +91,11 @@ def Solve_to(f,x0,t0,tn,deltat_max=0.01,method=rk4step,initialvalue = True ,t_in
    
     return  (Solve_ode(f,tvals,x0,method=method,event=event),tvals)
     
-def dx_dt(t, X):
-    X_dot = np.array([X[1]-t, -X[0]+t])
-    return X_dot
 
 
 
-def dx_dt2(t, X, a=0.2, b=0.1, d=0.4):
-    x = X[0]
-    y = X[1]
 
-    dxdt = x*(1-x) - a*x*y/(d+x)
-    dydt = b *y *(1 - y/x)
 
-    dXdt = np.array([dxdt, dydt])
-    return dXdt
 
 
 def findcycle(X,f,t0=0,period=None,phasecond=lambda  y : y[1]):
@@ -145,13 +107,51 @@ def findcycle(X,f,t0=0,period=None,phasecond=lambda  y : y[1]):
             return np.append(x0[1:]-x_array.y[:,-1],phasecond)
     else:     
         def G(x0,T=period):
-        
             t_array = [0,T]
-    
             x_array = solve_ivp(f,(t_array[0],t_array[1]),x0,max_step = 0.01)
-
             return x0[1:]-x_array.y[:,-1]
     return fsolve(G,X)
+
+def numericalcount(f,X0,parrange,step_size=0.01, solver=fsolve):
+    max_steps = int((parrange[0]-parrange[1])/step_size)
+    #add somthing that masks any function with a t parameter to same function with no t or t included in X
+    #needed for consistency
+    if max_steps<0:
+        step_size=step_size*-1
+        max_steps=max_steps*-1
+    sol = np.zeros(shape=(len(X0),max_steps)).T
+    par=np.linspace(parrange[0],parrange[1],max_steps)  
+    sol[0] = X0
+    for i in range(max_steps-1):
+        sol[i+1]=solver(f,sol[i],args=(par[i]))
+    return par,sol
+
+def arclengthcountinuation(f,X0,X1,parrange,step_size=0.01, solver=fsolve):
+    max_steps = int((parrange[0]-parrange[1])/step_size)
+    if max_steps<0:
+        step_size=step_size*-1
+        max_steps=max_steps*-1
+    sol = np.zeros(shape=(len(X0),max_steps)).T
+    sol[0]=X0
+    sol[1]=X1
+    par=np.linspace(parrange[0],parrange[1],max_steps)
+
+    def G(X2,X1,X0,par):#takes 2 previous values to guess new 
+        secant = X1-X0
+        Xprime = X1+secant
+        print(np.dot(secant,X2-Xprime))
+        #print(np.array([np.dot(secant,X2-Xprime),*f(X2,par)],dtype=object))
+        return np.array([np.dot(secant,X2-Xprime),(f(X2,par))],dtype=object)
+    for i in range(max_steps-1):
+
+        sol[i+2]=fsolve(G,sol[i+1],args=(sol[i+1],sol[i],par[i]))
+        
+    return sol
+
+"""inputs Bellow"""
+
+
+
 
 def mass_spring(t,x,const = [0.1,0.1,32,0.1,0.1]):
     m=const[0]
@@ -163,26 +163,63 @@ def mass_spring(t,x,const = [0.1,0.1,32,0.1,0.1]):
     dx2 = (1/m)*(gamma*np.sin(w*t)-(c*x[1])-(k*x[0]))
     return np.array([dx1,dx2])
 
+def drdt(X,param=0.1):
+    print("in drdt")
+    print(X)
+    a=param
+    r=X[0]
+    theta =1 
+    return np.array([a*r+r**3-r**5,theta])
+
+def hopf(U,param=1):
+    b=param
+    print(U)
+    print(param)
+    du1=b*U[0]-U[1]+U[0]*(U[0]**2+U[1]**2)-U[0]*(U[0]**2+U[1]**2)**2
+    du2=U[0]+b*U[1]+U[1]*(U[0]**2+U[1]**2)-U[1]*(U[0]**2+U[1]**2)**2
+    return np.array([du1,du2])
+def fsolvenotshit(f,numsolutions,domain,params=None,checks=20):
+    #domain has 2 values for each dimension of fs input
+    ranges=[]
+    for i in domain:
+        ranges.append(np.linspace(i[0],i[1],checks))
+    #list of lists of input vals
+    solutions = []
+    for i in ranges:
+        sol=fsolve(f,i,args=params)
+        if sol not in solutions:
+            solutions.append(sol)
+        if len(solutions)==numsolutions:
+            return solutions
+        
+    print("did not find intended number of solutions")
+    return solutions
+
+
+def poly(X,param=1):
+    return np.array([X**2+param*X+1])
 if __name__ == "__main__":
-    b= findcycle([1,2,3],mass_spring)
+    #b= findcycle([1,2,3],mass_spring)
     
     fig, axs = plt.subplots(2)
-    
-    sol = solve_ivp(mass_spring,(0,b[0]),b[1:],max_step = 0.01)
-    (xvals,tvals)=Solve_to(mass_spring,b[1:],0,b[0])
-    print(b)
-    print(tvals[-1])
-    print(sol.t[-1])
-    print(xvals[-1,:])
-    print(sol.y[:,0])
-    axs[0].plot(sol.t,sol.y[1,:])
-    axs[0].plot(sol.t,sol.y[0,:])
-    axs[1].plot(xvals[:,0],xvals[:,1])
+    #sol=arclengthcountinuation(hopf,[1,1],[1.1,1.1],(1,2))
+    sol=numericalcount(poly,[1],(-2,2))
+    #sol = solve_ivp(mass_spring,(0,1),-2,2,max_step = 0.01)
+    #(xvals,tvals)=Solve_to(drdt,[1,0],-10,10)
+    #print(b)
+    #print(tvals[-1])
+    #print(sol.t[-1])
+    #print(xvals[-1,:])
+    #print(sol.y[:,0])
+    #axs[0].plot(sol.t,sol.y[1,:])
+    #axs[0].plot(sol.t,sol.y[0,:])
+    #axs[1].plot(tvals,xvals[:,0])
     #axs[1].plot(tvals,xvals[:,1])
-    
-    """
-    Solve to broken for t dependent
-    """
+    (xvals,fvals)=sol
+    print(np.shape(xvals))
+    print(np.shape(fvals[:,0]))
+    axs[0].plot(xvals,fvals[:,0])
+    axs[1].plot(fvals[:,0],fvals[:,1])
     for i in axs:
         i.grid()
     #original = f(tvals,0)
