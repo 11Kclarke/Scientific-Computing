@@ -10,9 +10,9 @@ from matplotlib import animation
 
 
 # Set problem parameters/functions
-kappa = 1   # diffusion constant
-L=5         # length of spatial domain
-T=25        # total time to solve for
+kappa = 5   # diffusion constant
+L=10         # length of spatial domain
+T=10        # total time to solve for
 def u_I(x):
     # initial temperature distribution
     y = np.sin(pi*x/L)
@@ -49,37 +49,7 @@ def TDMAsolver(a, b, c, d):
     
 
 
-def forwardeuler(f,T,X,boundary=0):
-
-    mx = len(X)-1
-    # Set up the solution variables
-    u_j = np.zeros(X.size)      # u at current time step
-    u_jp1 = np.zeros(X.size)    # u at next time step
-    
-    lmbda = kappa*(T[1]-T[0])/((X[1]-X[0])**2)#move inside of for loop when implementing variable timestep
-    print("\n\n")
-    print(lmbda)
-    print((T[0]-T[1]))
-    print((X[0]-X[1])**2)
-    print("\n\n")
-    # Set initial condition
-    for i in range(mx):
-        u_j[i] = u_I(X[i])
-    # Boundary conditions
-    u_j[0] = 0; u_j[mx] = 0
-    for t in T:
-        # Forward Euler timestep at inner mesh points
-        # PDE discretised at position x[i], time t
-        for i in range(1, mx-1):
-            u_jp1[i] = u_j[i] + lmbda*(u_j[i-1] - 2*u_j[i] + u_j[i+1])
-            
-        # Boundary conditions
-        u_jp1[0] = 0; u_jp1[mx] = 0
-            
-        # Save u_j at time t[j+1]
-        u_j[:] = u_jp1[:]
-    return u_j
-
+"""
 def solvepde(f,t0,tn,domain,condition,deltat_max,method=forwardeuler):
     if len(condition)!= len(domain):
         raise "wrong number of innitial conditions"
@@ -98,6 +68,7 @@ def solvepde(f,t0,tn,domain,condition,deltat_max,method=forwardeuler):
     for i in range(len(domain)):
         domain[i]=np.linspace(domain[i][0],domain[i][1],steps)
     return method()
+"""
 def backwardseuler(T,X,innitial,boundary=lambda  t : (0,0)):
     mx = len(X)
     sol = np.zeros(shape=(T.size,X.size))
@@ -134,7 +105,7 @@ def forwardeuler(T,X,innitial,boundary=lambda  t : (0,0)):
         sol[i][0]=sol[i][-1]+lmbda*boundary(T[i])[0]
         sol[i][-1]=sol[i][-1]+lmbda*boundary(T[i])[1]
     return sol
-def CrankNicolson(T,X,innitial,boundary=lambda  t : (t**2,0)):
+def CrankNicolson(T,X,innitial,boundary=lambda  t : (0,0)):
     mx = len(X)
     lmbda = kappa*(T[1]-T[0])/((X[1]-X[0])**2)
     sol = np.zeros(shape=(T.size,X.size))
@@ -144,12 +115,12 @@ def CrankNicolson(T,X,innitial,boundary=lambda  t : (t**2,0)):
     sol[0][-1]=sol[i][-1]+lmbda*boundary(T[i])[1]
 
     d = np.diag([1-lmbda]*(mx))
-    d1 = np.diag([lmbda/2]*(mx-1),k=1)
+    d1 = np.diag([lmbda/2]*(mx-1),k=1)#diagonals of A
     d2 = np.diag([lmbda/2]*(mx-1),k=-1)
     A=d+d1+d2
     
     db = np.array([lmbda+1]*(mx))
-    d1b = np.array([-lmbda/2]*(mx-1))
+    d1b = np.array([-lmbda/2]*(mx-1))#diagnoals of B
     d2b = np.array([-lmbda/2]*(mx-1))
     for i in range(1,len(T)):
         
@@ -180,16 +151,15 @@ def animatepde(X,save=False,path=None):
         face_id = 0
         if not path:
             path=os.getcwd()
-        
         while os.path.exists(path+"\\PDE_Anim"+str(face_id)+".gif"):
             face_id+=1
         f=path+"\\PDE_Anim"+str(face_id)+".gif"
         print(f)
-    anim.save(f, writer='imagemagick',fps=15,progress_callback=lambda i, n: print(i))
+        anim.save(f, writer='imagemagick',fps=15,progress_callback=lambda i, n: print(i))
     plt.show()
 if __name__ == "__main__":
     xvals = np.linspace(0,L,80)
-    tvals = np.linspace(0,T,800)
+    tvals = np.linspace(0,T,200)
     """
     fig, axs = plt.subplots(4)
     
@@ -211,7 +181,7 @@ if __name__ == "__main__":
     X=CrankNicolson(tvals,xvals,u_I)
     print(X.shape)
     #axs[2].plot(X)
-    animatepde(X,save=True)
+    animatepde(X,save=False)
     #for i in axs:
         #i.grid()
     plt.show()
