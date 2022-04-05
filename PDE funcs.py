@@ -110,12 +110,16 @@ def backwardseuler(T,X,innitial,boundary=0):
     
     for i in range(1,len(T)):
         sol[i]=TDMAsolver(d1,d,d2,sol[i-1])
+        sol[i][0]=0
+        sol[i][-1]=0
     return sol
 def forwardeuler(T,X,innitial,boundary=0):
     mx = len(X)
     sol = np.zeros(shape=(T.size,X.size))
     for i in range(mx):
         sol[0][i] = innitial(X[i])
+    sol[0][0]=0
+    sol[0][-1]=0
     lmbda = kappa*(T[1]-T[0])/((X[1]-X[0])**2)
     d = np.diag([1-2*lmbda]*(mx))
     d1 = np.diag([lmbda]*(mx-1),k=1)
@@ -124,7 +128,30 @@ def forwardeuler(T,X,innitial,boundary=0):
     
     for i in range(1,len(T)):
         sol[i]=np.matmul(A,sol[i-1])
-    return sol    
+    return sol
+def CrankNicolson(T,X,innitial,boundary=0):
+    mx = len(X)
+    sol = np.zeros(shape=(T.size,X.size))
+    for i in range(mx):
+        sol[0][i] = innitial(X[i])
+    sol[0][0]=0
+    sol[0][-1]=0
+    print(sol.shape)
+    lmbda = kappa*(T[1]-T[0])/((X[1]-X[0])**2)
+    d = np.diag([lmbda-1]*(mx))
+    d1 = np.diag([lmbda/2]*(mx-1),k=1)
+    d2 = np.diag([lmbda/2]*(mx-1),k=-1)
+    A=d+d1+d2
+    db = np.array([lmbda+1]*(mx))
+    d1b = np.array([-lmbda/2]*(mx-1))
+    d2b = np.array([-lmbda/2]*(mx-1))
+    for i in range(1,len(T)):
+        
+        sol[i]=np.matmul(A,sol[i-1])
+        sol[i]=TDMAsolver(d1b,db,d2b,sol[i])
+        sol[i][0]=0
+        sol[i][-1]=0
+    return sol
 if __name__ == "__main__":
     fig, axs = plt.subplots(2)
     """ xvals = np.linspace(0,1,200)
@@ -132,12 +159,13 @@ if __name__ == "__main__":
     correct =  u_exact(xvals,tvals)
     
     axs[0].plot(tvals,correct)"""
-    xvals = np.linspace(0,5,100)
-    tvals = np.linspace(0,1,400)
+    xvals = np.linspace(0,5,10)
+    tvals = np.linspace(0,1,100)
     X=backwardseuler(tvals,xvals,u_I)
+    print(X.shape)
     axs[0].plot(X)
-    X=forwardeuler(tvals,xvals,u_I)
-
+    X=CrankNicolson(tvals,xvals,u_I)
+    print(X.shape)
     axs[1].plot(X)
     for i in axs:
         i.grid()
