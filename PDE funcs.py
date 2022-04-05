@@ -5,11 +5,14 @@ from math import pi
 import sympy as sp
 from sympy.utilities.lambdify import lambdify
 import matplotlib.pyplot as plt
+import seaborn as sns
+from matplotlib import animation
+
 
 # Set problem parameters/functions
 kappa = 1   # diffusion constant
 L=5         # length of spatial domain
-T=1        # total time to solve for
+T=25        # total time to solve for
 def u_I(x):
     # initial temperature distribution
     y = np.sin(pi*x/L)
@@ -131,7 +134,7 @@ def forwardeuler(T,X,innitial,boundary=lambda  t : (0,0)):
         sol[i][0]=sol[i][-1]+lmbda*boundary(T[i])[0]
         sol[i][-1]=sol[i][-1]+lmbda*boundary(T[i])[1]
     return sol
-def CrankNicolson(T,X,innitial,boundary=lambda  t : (0,0)):
+def CrankNicolson(T,X,innitial,boundary=lambda  t : (t**2,0)):
     mx = len(X)
     lmbda = kappa*(T[1]-T[0])/((X[1]-X[0])**2)
     sol = np.zeros(shape=(T.size,X.size))
@@ -140,10 +143,11 @@ def CrankNicolson(T,X,innitial,boundary=lambda  t : (0,0)):
     sol[0][0]=sol[i][-1]+lmbda*boundary(T[i])[0]
     sol[0][-1]=sol[i][-1]+lmbda*boundary(T[i])[1]
 
-    d = np.diag([lmbda-1]*(mx))
+    d = np.diag([1-lmbda]*(mx))
     d1 = np.diag([lmbda/2]*(mx-1),k=1)
     d2 = np.diag([lmbda/2]*(mx-1),k=-1)
     A=d+d1+d2
+    
     db = np.array([lmbda+1]*(mx))
     d1b = np.array([-lmbda/2]*(mx-1))
     d2b = np.array([-lmbda/2]*(mx-1))
@@ -153,11 +157,42 @@ def CrankNicolson(T,X,innitial,boundary=lambda  t : (0,0)):
         sol[i]=TDMAsolver(d1b,db,d2b,sol[i])
         sol[i][0]=sol[i][-1]+lmbda*boundary(T[i])[0]
         sol[i][-1]=sol[i][-1]+lmbda*boundary(T[i])[1]
+        
     return sol
+def animatepde(X,save=False,path=None):
+    
+    maxtemp=max(X.flatten())
+    mintemp=min(X.flatten())
+    centre = (maxtemp+mintemp)/2
+    fig = plt.figure()
+    sns.heatmap(np.zeros((10, 1)),square=False,center=centre,vmax=maxtemp,vmin=mintemp) 
+    def init():
+      plt.clf()
+      sns.heatmap(np.zeros((10, 1)),square=False,center=centre,vmax=maxtemp,vmin=mintemp)
+
+    def animate(i):
+        D = np.asarray(X[:][i]).reshape(len(X[:][i]),1)
+        plt.clf()
+        sns.heatmap(D,square=False,center=centre,vmax=maxtemp,vmin=mintemp)
+    anim = animation.FuncAnimation(fig, animate, init_func=init, frames=X.shape[1], repeat = False)
+    if save:
+        import os
+        face_id = 0
+        if not path:
+            path=os.getcwd()
+        
+        while os.path.exists(path+"\\PDE_Anim"+str(face_id)+".gif"):
+            face_id+=1
+        f=path+"\\PDE_Anim"+str(face_id)+".gif"
+        print(f)
+    anim.save(f, writer='imagemagick',fps=15,progress_callback=lambda i, n: print(i))
+    plt.show()
 if __name__ == "__main__":
+    xvals = np.linspace(0,L,80)
+    tvals = np.linspace(0,T,800)
+    """
     fig, axs = plt.subplots(4)
-    xvals = np.linspace(0,L,5)
-    tvals = np.linspace(0,T,200)
+    
     correct = []
     for i in xvals:
         correct.append(u_exact(i,tvals))
@@ -172,12 +207,13 @@ if __name__ == "__main__":
     X=backwardseuler(tvals,xvals,u_I)
     print(X.shape)
     axs[1].plot(X)
+    """
     X=CrankNicolson(tvals,xvals,u_I)
     print(X.shape)
-    axs[2].plot(X)
-   
-    for i in axs:
-        i.grid()
+    #axs[2].plot(X)
+    animatepde(X,save=True)
+    #for i in axs:
+        #i.grid()
     plt.show()
 
     
