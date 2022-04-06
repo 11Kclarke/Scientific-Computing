@@ -23,6 +23,26 @@ def u_exact(x,t):
     y = np.exp(-kappa*(pi**2/L**2)*t)*np.sin(pi*x/L)
     return y
 
+def u_I2d(x):
+    # initial temperature distribution
+    
+    return np.array([np.sin(np.pi*x[0]/L),np.cos(np.pi*x[1]/L)])
+ 
+
+def create2dgrid(min,max,steps):
+    A=[]
+    max=5
+    x=y=min=0
+    steps = 10
+    stepsize=(max-x)/steps
+    for j in range(steps):
+        for i in range(steps):
+            x+=stepsize
+            A.append((x,y))
+        x=min
+        y+=stepsize
+    return A
+
 
 ## Tri Diagonal Matrix Algorithm(a.k.a Thomas algorithm) solver
 """stolen from: https://gist.github.com/cbellei/8ab3ab8551b8dfc8b081c518ccd9ada9"""
@@ -130,6 +150,9 @@ def CrankNicolson(T,X,innitial,boundary=lambda  t : (0,0)):
         sol[i][-1]=sol[i][-1]+lmbda*boundary(T[i])[1]
         
     return sol
+
+
+
 def animatepde(X,save=False,path=None):
     
     maxtemp=max(X.flatten())
