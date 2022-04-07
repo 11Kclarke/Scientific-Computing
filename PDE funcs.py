@@ -7,7 +7,7 @@ from sympy.utilities.lambdify import lambdify
 import matplotlib.pyplot as plt
 import seaborn as sns
 from matplotlib import animation
-
+import scipy.linalg as linalg
 
 # Set problem parameters/functions
 kappa = 16   # diffusion constant
@@ -154,7 +154,8 @@ def backwardseuler(T,X,innitial,boundary=None):
     #sol[0][-1]=lmbda*boundary(T[0])[1]
     for i in range(1,len(T)):
         for M in A:
-            sol[i]+=np.linalg.solve(M,sol[i-1])
+            #sol[i]+=np.linalg.solve(M,sol[i-1])
+            sol[i] += linalg.solve(M, sol[i-1], assume_a='sym')#takes advantage of matrices always being symetric
     """for i in range(1,len(T)):
         if len(sol[0][0])==1:
             sol[i]=TDMAsolver(d1,d,d2,sol[i-1])
