@@ -10,8 +10,8 @@ from matplotlib import animation
 
 
 # Set problem parameters/functions
-kappa = 5   # diffusion constant
-L=10        # length of spatial domain
+kappa = 16   # diffusion constant
+L=8        # length of spatial domain
 T=4       # total time to solve for
 def u_I(x):
     # initial temperature distribution
@@ -92,31 +92,70 @@ def solvepde(f,t0,tn,domain,condition,deltat_max,method=forwardeuler):
         domain[i]=np.linspace(domain[i][0],domain[i][1],steps)
     return method()
 """
-def backwardseuler(T,X,innitial,boundary=None):
-    if not boundary:
-        boundary = lambda  t : (np.zeros(shape=np.shape(X[0])),np.zeros(shape=np.shape(X[0])))
-    mx = len(X)
-    sol = np.zeros(shape=(T.size,X.size))
-    lmbda = kappa*(T[1]-T[0])/((X.flatten()[1]-X.flatten()[2])**2)
-    innitialcond=[]
+def customreshape(shape,sol):
+    solshaped=[]
+    if len(shape)>1:
+        for i in sol:
+            #i flattened list of spatial stuff at time i
+            solshaped.append(i.reshape(shape[:-1]))
+        sol=np.array(solshaped)
+    return sol
+def setuppde(T,X,innitial,boundary=lambda  t : (0,0)):
+    X=np.array(X)
+    #X should be A grid of tuples where the grid is dimensionality of the spatial domain and tuple length of dim of spatial domain
+    shape=np.shape(X)#ignores the last dim, its the size of the tuples
+    #number of spatial values in 1 time window 1 spatial value is a tuple
+    if len(shape)>1:
+        mx = int(np.prod(shape[:-1]))
+        X=X.flatten().reshape(mx,shape[-1])
+    else:
+        mx=len(X)
+    sol = np.zeros(shape=(T.size,mx))
     for i in range(mx):
+        sol[0][i] = innitial(X[i])# innital condition function should take tuple of length dim of spatial domain and return 1 val
         
-        innitialcond.append(innitial(X[i]))
-    sol=np.array([innitialcond]*T.size)
+    """sol[0][0]=sol[i][-1]+lmbda*boundary(T[i])[0]
+    sol[0][-1]=sol[i][-1]+lmbda*boundary(T[i])[1]"""
+    
+    
+    X=X.flatten()
+    i=0
+    while (X[i+1]-X[i] == 0) or (T[i+1]-T[i] == 0): 
+        i+=1
+    lmbda = kappa*(T[i+1]-T[i])/((X[i+1]-X[i])**2)
+    sqrt = (2*mx)**1/2
+    print("\npre proccessing done\n")
+    return [T,X,sol,lmbda,shape,sqrt]
+def backwardseuler(T,X,innitial,boundary=None):
+    [T,X,sol,lmbda,shape,sqrt]=setuppde(T,X,innitial)
+    
   
     """print(np.shape(sol))
     print(sol[0])
     print(sol[0][0])
     print(lmbda*boundary(T[0])[0])
 """
-    sol[0][0]=lmbda*boundary(T[0])[0]
-    sol[0][-1]=lmbda*boundary(T[0])[1]
-    d = np.array([2*lmbda+1]*(mx))
-    d1 = np.array([-lmbda]*(mx-1))
-    d2 = np.array([-lmbda]*(mx-1))
-    print(lmbda)
-    print("\n\n\n")
+    k=1
+    d = np.diag([1+2*lmbda]*int(sqrt))
+    d1 = np.diag([-lmbda]*(int(sqrt)-k),k=k)
+    d2 = np.diag([-lmbda]*(int(sqrt)-k),k=-k)
+    M=d+d1+d2
+    A=[M]#array of 2d deriv matrices
+    for i in range(1,len(shape)-1):#creates deriv matrix for each dim  
+        #mx num of total vals in time window
+        #assuming square matrix of side length a 
+        #mx = a^2 thus sqrt(2mx) = vals in diag
+        k*=shape[:-1][i]
+        d = np.diag([1+2*lmbda]*int(sqrt))
+        d1 = np.diag([-lmbda]*(int(sqrt)-k),k=k)
+        d2 = np.diag([-lmbda]*(int(sqrt)-k),k=-k)
+        M=d+d1+d2
+    #sol[0][0]=lmbda*boundary(T[0])[0]
+    #sol[0][-1]=lmbda*boundary(T[0])[1]
     for i in range(1,len(T)):
+        for M in A:
+            sol[i]+=np.linalg.solve(M,sol[i-1])
+    """for i in range(1,len(T)):
         if len(sol[0][0])==1:
             sol[i]=TDMAsolver(d1,d,d2,sol[i-1])
         else:
@@ -126,82 +165,48 @@ def backwardseuler(T,X,innitial,boundary=None):
             #print(np.shape(sol[i-1]))
             sol[i]= np.linalg.solve(A,sol[i-1])
         sol[i][0]=sol[i][-1]+lmbda*boundary(T[i])[0]
-        sol[i][-1]=sol[i][-1]+lmbda*boundary(T[i])[1]
+        sol[i][-1]=sol[i][-1]+lmbda*boundary(T[i])[1]"""
+    sol=customreshape(shape,sol)
     return sol
 
 
 def forwardeuler(T,X,innitial,boundary=lambda  t : (0,0)):
-    X=np.array(X)
-    #X should be A grid of tuples where the grid is dimensionality of the spatial domain and tuple length of dim of spatial domain
-    shape=np.shape(X)#ignores the last dim, its the size of the tuples
-    print(shape)
-    #number of spatial values in 1 time window 1 spatial value is a tuple
+    [T,X,sol,lmbda,shape,sqrt]=setuppde(T,X,innitial)
     
-    
-    if len(shape)>1:
-        mx = int(np.prod(shape[:-1]))
-        X=X.flatten().reshape(mx,shape[-1])
-    else:
-        mx=len(X)
-        
-    sol = np.zeros(shape=(T.size,mx))
-    for i in range(mx):
-        print(X[i])
-        print(innitial(X[i]))
-        print(sol[0][i])
-        sol[0][i] = innitial(X[i])# innital condition function should take tuple of length dim of spatial domain and return 1 val
-        
-    """sol[0][0]=sol[i][-1]+lmbda*boundary(T[i])[0]
-    sol[0][-1]=sol[i][-1]+lmbda*boundary(T[i])[1]"""
-    A=[]#array of 2d deriv matrices
-    print(sol.shape)
-    X=X.flatten()
-    i=0
-    while (X[i+1]-X[i] == 0) or (T[i+1]-T[i] == 0): 
-        i+=1
-        
-        
-        
-    lmbda = kappa*(T[i+1]-T[i])/((X[i+1]-X[i])**2)
-    """print("lamda is : ")
-    print(lmbda)
-    print(kappa)
-    """
     k=1
-    sqrt = (2*mx)**1/2
+    d = np.diag([1-2*lmbda]*int(sqrt))
+    d1 = np.diag([lmbda]*(int(sqrt)-k),k=k)
+    d2 = np.diag([lmbda]*(int(sqrt)-k),k=-k)
+    M=d+d1+d2
+    A=[M]#array of 2d deriv matrices
     
-    for i in shape[:-1]:#creates deriv matrix for each dim  
+    
+    
+    for i in range(1,len(shape)-1):#creates deriv matrix for each dim  
         #mx num of total vals in time window
         #assuming square matrix of side length a 
         #mx = a^2 thus sqrt(2mx) = vals in diag
+        k*=shape[:-1][i]
         d = np.diag([1-2*lmbda]*int(sqrt))
         d1 = np.diag([lmbda]*(int(sqrt)-k),k=k)
         d2 = np.diag([lmbda]*(int(sqrt)-k),k=-k)
         M=d+d1+d2
+        print("reeeeeeeeeeeeeeeeeeeee")
         
-        print(M.shape)
         A.append(M)
-        #print(A)
-        k+=i
+
     """if each row is n long, the under and over element will be at -+n
     if there are 3 spatial dimensions the element infront/behind in 3rd dim will be +-(n*m) where m is length of 3rd dim
     as n*m must be stepped over before beingback in place in first dim 2 dims and same place in 3rd
     idk if this will work for 3d cant visualize it or check results so dont even know if i will test it
     however it makes sense that it would work"""
-    print(sol.shape)
     for i in range(1,len(T)):
         for M in A:
             sol[i]+=np.matmul(sol[i-1].flatten(),M)
         #sol[i][0]=sol[i][-1]+lmbda*boundary(T[i])[0]
         #sol[i][-1]=sol[i][-1]+lmbda*boundary(T[i])[1]
     #sol currently flattened spacial dims for each t
-    solshaped=[]
-    if len(shape)>1:
-        for i in sol:
-            #i flattened list of spatial stuff at time i
-            solshaped.append(i.reshape(shape[:-1]))
-        sol=np.array(solshaped)
-    print(sol.shape)
+    sol=customreshape(shape,sol)
     return sol
 
 
@@ -275,9 +280,9 @@ def animatepde(X,save=False,path=None):
         anim.save(f, writer='imagemagick',fps=15,progress_callback=lambda i, n: print(i))
     plt.show()
 if __name__ == "__main__":
-    #coords = np.linspace(0,L,80)
-    tvals = np.linspace(0,T,1000)
-    coords=create2dgrid(0,L,8)
+    #coords = np.linspace(0,L,16)
+    tvals = np.linspace(0,T,300)
+    coords=create2dgrid(0,L,24)
  
     """
     fig, axs = plt.subplots(4)
@@ -298,7 +303,7 @@ if __name__ == "__main__":
     axs[1].plot(X)
     """
    
-    X=forwardeuler(tvals,coords,u_I2d)
+    X=backwardseuler(tvals,coords,u_I2d)
     print("innital and final val")
     print(X[0])
     print("\n\n\n")
@@ -310,7 +315,7 @@ if __name__ == "__main__":
     #plt.plot(X[1])
     #axs[2].plot(X)
 
-    animatepde(X,save=False)
+    animatepde(X,save=True)
     #for i in axs:
         #i.grid()
     plt.show()
