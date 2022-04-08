@@ -9,14 +9,16 @@ import seaborn as sns
 from matplotlib import animation
 import scipy.linalg as linalg
 from scipy import sparse
-
+import sys
+np.set_printoptions(threshold=np.inf)
 # Set problem parameters/functions
-kappa = 16   # diffusion constant
-L=8        # length of spatial domain
-T=4       # total time to solve for
+kappa = 1   # diffusion constant
+L=8       # length of spatial domain
+T=10      # total time to solve for
 def u_I(x):
     # initial temperature distribution
-    y = np.sin(pi*x/L)
+    #y = np.sin(pi*x/L)
+    y = np.sin(pi*x)
     return y
 
 def u_exact(x,t):
@@ -24,10 +26,21 @@ def u_exact(x,t):
     y = np.exp(-kappa*(pi**2/L**2)*t)*np.sin(pi*x/L)
     return y
 
+"""def u_I2d(x):
+    # initial temperature distribution
+    
+    #return (np.sin(np.pi*x[1]/L)+np.cos(np.pi*x[0]/L))
+    if x[0]==0 or x[0]==L:
+        return 5
+    return 0
+"""
+
 def u_I2d(x):
     # initial temperature distribution
     
-    return np.sin(np.pi*x[0]/L)+np.cos(np.pi*x[1]/L)
+    #return (np.sin(x[1])+np.cos(x[0]))
+    
+    return 0
  
 
 def create2dgrid(min,max,steps):
@@ -80,59 +93,44 @@ def customreshape(shape,sol):
             solshaped.append(i.reshape(L,L))
         sol=np.array(solshaped)
     return sol
-def setuppde(T,X,innitial,boundary=lambda  X,t : (0,0)):
+def setuppde(T,X,innitial):
+    print("\npre proccessing started\n")
     X=np.array(X)
     #X should be A grid of tuples where the grid is dimensionality of the spatial domain and tuple length of dim of spatial domain
     shape=np.shape(X)#ignores the last dim, its the size of the tuples
     #number of spatial values in 1 time window 1 spatial value is a tuple
+    #print(X)
+    print(X.ndim)
+    print(shape)
     if len(shape)>1:
+        #has been passed tuples
+        dims=X.ndim-1
         mx = int(np.prod(shape[:-1]))
+        print(mx)
+        
+        sideL=int(mx**(1/2))
+        print(sideL)
         X=X.flatten().reshape(mx,shape[-1])
+        #print(X)
     else:
+        #has been passed individual values
         mx=len(X)
+        dims=1
     sol = np.zeros(shape=(T.size,mx))
     for i in range(mx):
         sol[0][i] = innitial(X[i])# innital condition function should take tuple of length dim of spatial domain and return 1 val
+    temp=X
+    
     X=X.flatten()
     i=0
     while (X[i+1]-X[i] == 0) or (T[i+1]-T[i] == 0): 
         i+=1
     lmbda = kappa*(T[i+1]-T[i])/((X[i+1]-X[i])**2)
+    X=temp
     sqrt = int((2*mx)**1/2)
     print("\npre proccessing done\n")
-    X=X.flatten().reshape(np.prod(shape[:-1]),shape[-1])
-    return [T,sol,lmbda,shape,sqrt,X]
-def backwardseuler(T,X,innitial,boundary=lambda  X,t : 1,Boundarytype="dir"):
     
-    [T,sol,lmbda,shape,sqrt,X]=setuppde(T,X,innitial)
-    k=1
-    d = np.diag([1+2*lmbda]*(sqrt))
-    d1 = np.diag([-lmbda]*((sqrt)-k),k=k)
-    d2 = np.diag([-lmbda]*((sqrt)-k),k=-k)
-    M=d+d1+d2
-    #M=sparse.csr_matrix(M)
-    A=[M]#array of 2d deriv matrices
-    for i in range(1,len(shape)-1):#creates deriv matrix for each dim  
-        #mx num of total vals in time window
-        #assuming square matrix of side length a 
-        #mx = a^2 thus sqrt(2mx) = vals in diag
-        k*=shape[:-1][i]
-        d = np.diag([1+2*lmbda]*sqrt)
-        d1 = np.diag([-lmbda]*((sqrt)-k),k=k)
-        d2 = np.diag([-lmbda]*((sqrt)-k),k=-k)
-        M=d+d1+d2
-    #sol[0][0]=lmbda*boundary(T[0])[0]
-    #sol[0][-1]=lmbda*boundary(T[0])[1]
-    for i in range(1,len(T)):
-        sol[i]= applycond(T[i],sol[i],boundary,X,Boundarytype,lmbda)
-        for M in A:
-            sol[i] += linalg.solve(M, sol[i-1], assume_a='sym')#takes advantage of matrices always being symetric
-        
-    sol=customreshape(shape,sol)
-    
-    return sol
-
-
+    return [T,sol,lmbda,shape,sqrt,X,dims]
 def forwardeuler(T,X,innitial,boundary=lambda  x,t : 0,Boundarytype="dir"):
     [T,sol,lmbda,shape,sqrt,X]=setuppde(T,X,innitial)
     
@@ -172,10 +170,50 @@ def forwardeuler(T,X,innitial,boundary=lambda  x,t : 0,Boundarytype="dir"):
     #sol currently flattened spacial dims for each t
     sol=customreshape(shape,sol)
     return sol
+def backwardseuler(T,X,innitial,boundary=lambda  X,t : 0,Boundarytype="dir"):
+    
+    [T,sol,lmbda,shape,sqrt,X,dims]=setuppde(T,X,innitial)
+    L=shape[0]
+    
+    
+    print(dims)
+    A=[]#array of 2d deriv matrices
+    k=1
+    print(np.shape(X))
+    for i in range(dims):#creates deriv matrix for each dim  
+        print("in deriv matrix loop")
+        print(i)
+        #mx num of total vals in time window
+        #assuming square matrix of side length a 
+        #mx = a^2 thus sqrt(2mx) = vals in diag
+        print(k)
+        k=L**i
+        print(k)
+        
+        d = np.diag([1+2*lmbda]*(sqrt))
+        d1 = np.diag([-lmbda]*(sqrt-k),k=k)
+        d2 = np.diag([-lmbda]*(sqrt-k),k=-k)
+        M=d+d1+d2
+        A.append(np.array(M))
+    print("fin deriv matrices")
+    print(len(A))
+    sol[0] = applycond(T[0],sol[0],boundary,X,Boundarytype,lmbda)
+    for i in range(1,len(T)):
+        sol[i]= applycond(T[i],sol[i],boundary,X,Boundarytype,lmbda)
+        for M in A:
+            sol[i] += (1/dims)*linalg.solve(M, sol[i-1], assume_a='sym')#takes advantage of matrices always being symetric
+        
+    sol=customreshape(shape,sol)
+    
+    return sol
+
+
+
 
 def applycond (t,sol,boundary,X,boundarytype,lmda):
     #applies a function of x and t to either edges of sol, or entire
-    dims= np.shape(X)[-1]
+    
+    dims= X.ndim
     sidelength = int(len(sol)**(1/dims))
     sol=sol.flatten()
     #2boundaries per dim
@@ -184,13 +222,15 @@ def applycond (t,sol,boundary,X,boundarytype,lmda):
     assuming square domain, n=sidelength= int(len(sol)**1/2), first and last n values boundary, 
     as well as every nth value, if cube domain every n*n value also edge
     """
-    
+    #print(sidelength)
+    #print(dims)
     if boundarytype=="dir":
         for d in range(dims):
             for i in range(sidelength):
                 
-                sol[i*(sidelength)**d]+=lmda*boundary(X[i*(sidelength)**d],t)
-                sol[(-i*(sidelength)**d)-1]+=lmda*boundary(X[(-i*(sidelength)**d)-1],t)#this is how i should have created the deriv matrices would have been cleaner
+                sol[i*((sidelength)**d)]+=lmda*boundary(X[i*((sidelength)**d)],t)#close boundary on axis d
+                sol[-i*((sidelength)**d)-1]+=lmda*boundary(X[-i*((sidelength)**d)-1],t)#far boundary on axis d
+                #sol[(-i*(sidelength)**d)-1]+=lmda*boundary(X[(-i*(sidelength)**d)-1],t)#this is how i should have created the deriv matrices would have been cleaner
     elif boundarytype =="periodic":#if periodic with no heat source use func that always gives 0, ie default
         for i in range(len(sol)):
             #print("periodic")
@@ -270,10 +310,13 @@ def animatepde(X,save=False,path=None):
     plt.show()
 
 if __name__ == "__main__":
-    #coords = np.linspace(0,L,16)
-    tvals = np.linspace(0,T,16)
-    coords=create2dgrid(0,L,24)
- 
+    coords = np.linspace(0,L,64)
+    
+    tvals = np.linspace(0,T,64)
+    #coords=create2dgrid(0,L,20)
+    
+    print(L)
+    print(T)
     """
     fig, axs = plt.subplots(4)
     
@@ -293,19 +336,9 @@ if __name__ == "__main__":
     axs[1].plot(X)
     """
     print(np.shape(coords))
-    X=backwardseuler(tvals,coords,u_I2d)
-    print(np.shape(X))
-    print("innital and final val")
-    print(X[0])
-    print("\n\n\n")
-    print(X[-1])
-    print("\n\n\n")
-    
-    print("\n\n\n")
-    print(X.shape)
-    #plt.plot(X[1])
-    #axs[2].plot(X)
 
+    X=backwardseuler(tvals,coords,u_I)
+    
     animatepde(X,save=False)
     #for i in axs:
         #i.grid()
