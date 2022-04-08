@@ -8,6 +8,7 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 from matplotlib import animation
 import scipy.linalg as linalg
+from scipy import sparse
 
 # Set problem parameters/functions
 kappa = 16   # diffusion constant
@@ -70,37 +71,16 @@ def TDMAsolver(a, b, c, d):
 
     return xc
     
-
-
-"""
-def solvepde(f,t0,tn,domain,condition,deltat_max,method=forwardeuler):
-    if len(condition)!= len(domain):
-        raise "wrong number of innitial conditions"
-    if t0 > tn and deltat_max > 0:
-        deltat_max=-deltat_max
-    steps = int(((tn-t0)/deltat_max))
-    finalstepsize = tn-(t0+deltat_max*steps)
-    print("final stepsize: ")
-    print(finalstepsize)
-    steps+=1
-    tvals=[t0]*steps
-    for i in range(steps-1):
-        tvals[i+1]=deltat_max+tvals[i]
-        #print(tvals[i+1])
-    tvals.append(tvals[-1]+finalstepsize)
-    for i in range(len(domain)):
-        domain[i]=np.linspace(domain[i][0],domain[i][1],steps)
-    return method()
-"""
 def customreshape(shape,sol):
     solshaped=[]
+    L=int(len(sol[0])**(1/2))
     if len(shape)>1:
         for i in sol:
             #i flattened list of spatial stuff at time i
-            solshaped.append(i.reshape(shape[:-1]))
+            solshaped.append(i.reshape(L,L))
         sol=np.array(solshaped)
     return sol
-def setuppde(T,X,innitial,boundary=lambda  t : (0,0)):
+def setuppde(T,X,innitial,boundary=lambda  X,t : (0,0)):
     X=np.array(X)
     #X should be A grid of tuples where the grid is dimensionality of the spatial domain and tuple length of dim of spatial domain
     shape=np.shape(X)#ignores the last dim, its the size of the tuples
@@ -113,66 +93,48 @@ def setuppde(T,X,innitial,boundary=lambda  t : (0,0)):
     sol = np.zeros(shape=(T.size,mx))
     for i in range(mx):
         sol[0][i] = innitial(X[i])# innital condition function should take tuple of length dim of spatial domain and return 1 val
-        
-    """sol[0][0]=sol[i][-1]+lmbda*boundary(T[i])[0]
-    sol[0][-1]=sol[i][-1]+lmbda*boundary(T[i])[1]"""
-    
-    
     X=X.flatten()
     i=0
     while (X[i+1]-X[i] == 0) or (T[i+1]-T[i] == 0): 
         i+=1
     lmbda = kappa*(T[i+1]-T[i])/((X[i+1]-X[i])**2)
-    sqrt = (2*mx)**1/2
+    sqrt = int((2*mx)**1/2)
     print("\npre proccessing done\n")
-    return [T,X,sol,lmbda,shape,sqrt]
-def backwardseuler(T,X,innitial,boundary=None):
-    [T,X,sol,lmbda,shape,sqrt]=setuppde(T,X,innitial)
+    X=X.flatten().reshape(np.prod(shape[:-1]),shape[-1])
+    return [T,sol,lmbda,shape,sqrt,X]
+def backwardseuler(T,X,innitial,boundary=lambda  X,t : 1,Boundarytype="dir"):
     
-  
-    """print(np.shape(sol))
-    print(sol[0])
-    print(sol[0][0])
-    print(lmbda*boundary(T[0])[0])
-"""
+    [T,sol,lmbda,shape,sqrt,X]=setuppde(T,X,innitial)
     k=1
-    d = np.diag([1+2*lmbda]*int(sqrt))
-    d1 = np.diag([-lmbda]*(int(sqrt)-k),k=k)
-    d2 = np.diag([-lmbda]*(int(sqrt)-k),k=-k)
+    d = np.diag([1+2*lmbda]*(sqrt))
+    d1 = np.diag([-lmbda]*((sqrt)-k),k=k)
+    d2 = np.diag([-lmbda]*((sqrt)-k),k=-k)
     M=d+d1+d2
+    #M=sparse.csr_matrix(M)
     A=[M]#array of 2d deriv matrices
     for i in range(1,len(shape)-1):#creates deriv matrix for each dim  
         #mx num of total vals in time window
         #assuming square matrix of side length a 
         #mx = a^2 thus sqrt(2mx) = vals in diag
         k*=shape[:-1][i]
-        d = np.diag([1+2*lmbda]*int(sqrt))
-        d1 = np.diag([-lmbda]*(int(sqrt)-k),k=k)
-        d2 = np.diag([-lmbda]*(int(sqrt)-k),k=-k)
+        d = np.diag([1+2*lmbda]*sqrt)
+        d1 = np.diag([-lmbda]*((sqrt)-k),k=k)
+        d2 = np.diag([-lmbda]*((sqrt)-k),k=-k)
         M=d+d1+d2
     #sol[0][0]=lmbda*boundary(T[0])[0]
     #sol[0][-1]=lmbda*boundary(T[0])[1]
     for i in range(1,len(T)):
+        sol[i]= applycond(T[i],sol[i],boundary,X,Boundarytype,lmbda)
         for M in A:
-            #sol[i]+=np.linalg.solve(M,sol[i-1])
             sol[i] += linalg.solve(M, sol[i-1], assume_a='sym')#takes advantage of matrices always being symetric
-    """for i in range(1,len(T)):
-        if len(sol[0][0])==1:
-            sol[i]=TDMAsolver(d1,d,d2,sol[i-1])
-        else:
-            A=np.diag(d)+np.diag(d1,k=1)+np.diag(d2,k=-1)
-            #print(A)
-            #print(np.shape(A))
-            #print(np.shape(sol[i-1]))
-            sol[i]= np.linalg.solve(A,sol[i-1])
-        sol[i][0]=sol[i][-1]+lmbda*boundary(T[i])[0]
-        sol[i][-1]=sol[i][-1]+lmbda*boundary(T[i])[1]"""
+        
     sol=customreshape(shape,sol)
+    
     return sol
 
 
-def forwardeuler(T,X,innitial,boundary=lambda  t : (0,0)):
-    [T,X,sol,lmbda,shape,sqrt]=setuppde(T,X,innitial)
+def forwardeuler(T,X,innitial,boundary=lambda  x,t : 0,Boundarytype="dir"):
+    [T,sol,lmbda,shape,sqrt,X]=setuppde(T,X,innitial)
     
     k=1
     d = np.diag([1-2*lmbda]*int(sqrt))
@@ -192,7 +154,7 @@ def forwardeuler(T,X,innitial,boundary=lambda  t : (0,0)):
         d1 = np.diag([lmbda]*(int(sqrt)-k),k=k)
         d2 = np.diag([lmbda]*(int(sqrt)-k),k=-k)
         M=d+d1+d2
-        print("reeeeeeeeeeeeeeeeeeeee")
+        
         
         A.append(M)
 
@@ -204,13 +166,42 @@ def forwardeuler(T,X,innitial,boundary=lambda  t : (0,0)):
     for i in range(1,len(T)):
         for M in A:
             sol[i]+=np.matmul(sol[i-1].flatten(),M)
+        sol[i]+= lmbda*applycond(T[i],sol[i],boundary,X,Boundarytype,lmbda)
         #sol[i][0]=sol[i][-1]+lmbda*boundary(T[i])[0]
         #sol[i][-1]=sol[i][-1]+lmbda*boundary(T[i])[1]
     #sol currently flattened spacial dims for each t
     sol=customreshape(shape,sol)
     return sol
 
-
+def applycond (t,sol,boundary,X,boundarytype,lmda):
+    #applies a function of x and t to either edges of sol, or entire
+    dims= np.shape(X)[-1]
+    sidelength = int(len(sol)**(1/dims))
+    sol=sol.flatten()
+    #2boundaries per dim
+    """
+    X and sol should both be flat and have same num of elements, where each element of X is tuple
+    assuming square domain, n=sidelength= int(len(sol)**1/2), first and last n values boundary, 
+    as well as every nth value, if cube domain every n*n value also edge
+    """
+    
+    if boundarytype=="dir":
+        for d in range(dims):
+            for i in range(sidelength):
+                
+                sol[i*(sidelength)**d]+=lmda*boundary(X[i*(sidelength)**d],t)
+                sol[(-i*(sidelength)**d)-1]+=lmda*boundary(X[(-i*(sidelength)**d)-1],t)#this is how i should have created the deriv matrices would have been cleaner
+    elif boundarytype =="periodic":#if periodic with no heat source use func that always gives 0, ie default
+        for i in range(len(sol)):
+            #print("periodic")
+            sol[i]+=boundary(X[i],t)
+        for d in range(dims):
+            for i in range(sidelength):
+                sol[i*(sidelength)**d]=sol[(-i*(sidelength)**d)-1]
+    else:
+        for i in range(len(sol)):
+            sol[i]+=lmda*boundary(X[i],t) 
+    return sol
 
 def CrankNicolson(T,X,innitial,boundary=lambda  t : (0,0)):
     mx = len(X)
@@ -238,9 +229,6 @@ def CrankNicolson(T,X,innitial,boundary=lambda  t : (0,0)):
         sol[i][-1]=sol[i][-1]+lmbda*boundary(T[i])[1]
         
     return sol
-
-
-
 def animatepde(X,save=False,path=None):
     
     maxtemp=max(X.flatten())
@@ -280,9 +268,10 @@ def animatepde(X,save=False,path=None):
         print(f)
         anim.save(f, writer='imagemagick',fps=15,progress_callback=lambda i, n: print(i))
     plt.show()
+
 if __name__ == "__main__":
     #coords = np.linspace(0,L,16)
-    tvals = np.linspace(0,T,300)
+    tvals = np.linspace(0,T,16)
     coords=create2dgrid(0,L,24)
  
     """
@@ -303,20 +292,21 @@ if __name__ == "__main__":
     print(X.shape)
     axs[1].plot(X)
     """
-   
+    print(np.shape(coords))
     X=backwardseuler(tvals,coords,u_I2d)
+    print(np.shape(X))
     print("innital and final val")
     print(X[0])
     print("\n\n\n")
     print(X[-1])
     print("\n\n\n")
-    print(X)
+    
     print("\n\n\n")
     print(X.shape)
     #plt.plot(X[1])
     #axs[2].plot(X)
 
-    animatepde(X,save=True)
+    animatepde(X,save=False)
     #for i in axs:
         #i.grid()
     plt.show()
