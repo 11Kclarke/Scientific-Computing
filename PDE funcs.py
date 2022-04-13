@@ -201,7 +201,7 @@ def CrankNicolson(T,X,innitial,boundary=lambda  t : (0,0)):
         
     return sol
     
-def backwardseuler(T,X,innitial,boundary=lambda  X,t : 1,Boundarytype="dir"):
+def backwardseuler(T,X,innitial,boundary=lambda  X,t : 0,Boundarytype="dir"):
     
     [T,sol,lmbda,shape,sqrt,X,dims]=setuppde(T,X,innitial)
     L=shape[0]
@@ -211,17 +211,22 @@ def backwardseuler(T,X,innitial,boundary=lambda  X,t : 1,Boundarytype="dir"):
     d = np.diag([1+2*lmbda]*(sqrt))
     d1 = np.diag(side,k=k)
     d2 = np.diag(side,k=-k)
-    M=d1+d2+d
+    d = np.array([1+2*lmbda]*(sqrt))
+    
+    #M=d1+d2+d
     if dims==1:
         for i in range(1,len(T)):
             sol[i-1]= applycond(T[i],sol[i-1],boundary,X,Boundarytype,lmbda)   
-            sol[i]+=(linalg.solve(M, sol[i-1], assume_a='sym')/(dims**2))
+            #sol[i]+=(linalg.solve(M, sol[i-1], assume_a='sym'))
+            sol[i]= TDMAsolver(d,side,side,sol[i])
     else:  
         for i in range(1,len(T)):
             sol[i-1]= applycond(T[i],sol[i-1],boundary,X,Boundarytype,lmbda) 
-            ydiff=(1/dims)*linalg.solve(M, np.reshape(sol[i-1],(L,L)).T.flatten(), assume_a='sym') 
-            sol[i]+=np.reshape(ydiff,(L,L)).T.flatten()
-            sol[i]+=(1/dims)*linalg.solve(M, sol[i-1], assume_a='sym')       
+            #ydiff=(1/dims)*linalg.solve(M, np.reshape(sol[i-1],(L,L)).T.flatten(), assume_a='sym')
+            ydiff = TDMAsolver(side,d,side,np.reshape(sol[i-1],(L,L)).T.flatten()) 
+            sol[i]+=np.reshape(ydiff,(L,L)).T.flatten()/2*dims
+            #sol[i]+=(1/dims)*linalg.solve(M, sol[i-1], assume_a='sym')
+            sol[i]+=TDMAsolver(side,d,side,sol[i-1])/2*dims
     sol=customreshape(shape,sol)
     return sol
 
