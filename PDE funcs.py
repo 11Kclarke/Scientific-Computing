@@ -12,9 +12,9 @@ from scipy import sparse
 import sys
 np.set_printoptions(threshold=np.inf)
 # Set problem parameters/functions
-kappa = 2   # diffusion constant
-L=2       # length of spatial domain
-T=4      # total time to solve for
+kappa = 0.2   # diffusion constant
+L=4       # length of spatial domain
+T=32      # total time to solve for
 def u_I(x):
     # initial temperature distribution
     #y = np.sin(pi*x/L)
@@ -38,7 +38,7 @@ def u_exact(x,t):
 def u_I2d(x):
     # initial temperature distribution
     
-    #return (np.sin(x[1])+np.cos(x[0]))
+    return 4*(np.sin(x[1])**2+np.cos(x[0])**2)
     
     return 0
  
@@ -88,9 +88,11 @@ def customreshape(shape,sol):
     solshaped=[]
     L=int(len(sol[0])**(1/2))
     if len(shape)>1:
-        for i in sol:
+        for i in range(1,len(sol)):
             #i flattened list of spatial stuff at time i
-            solshaped.append(i.reshape(L,L))
+            soli=sol[i].reshape(L,L)
+            #solshaped.append(soli[1:-1,1:-1])
+            solshaped.append(soli[2:-2,2:-2])
         sol=np.array(solshaped)
     return sol
 def setuppde(T,X,innitial):
@@ -132,7 +134,7 @@ def setuppde(T,X,innitial):
     return [T,sol,lmbda,shape,sqrt,X,dims]
 
 
-def forwardeuler(T,X,innitial,boundary=lambda  x,t : 0,Boundarytype="dir"):
+def forwardeuler(T,X,innitial,boundary=lambda  x,t : 1,Boundarytype="dir"):
 
 
     [T,sol,lmbda,shape,sqrt,X]=setuppde(T,X,innitial)
@@ -201,19 +203,17 @@ def CrankNicolson(T,X,innitial,boundary=lambda  t : (0,0)):
         
     return sol
     
-def backwardseuler(T,X,innitial,boundary=lambda  X,t : 0,Boundarytype="dir"):
+def backwardseuler(T,X,innitial,boundary=lambda  X,t : 1,Boundarytype="dir"):
     
     [T,sol,lmbda,shape,sqrt,X,dims]=setuppde(T,X,innitial)
     L=shape[0]
     print(dims)
     k=1
     side=np.array([-lmbda]*(sqrt-k))
-    d = np.diag([1+2*lmbda]*(sqrt))
-    d1 = np.diag(side,k=k)
-    d2 = np.diag(side,k=-k)
     d = np.array([1+2*lmbda]*(sqrt))
     
     #M=d1+d2+d
+    sol[0]= applycond(T[0],sol[0],boundary,X,Boundarytype,lmbda)
     if dims==1:
         for i in range(1,len(T)):
             sol[i-1]= applycond(T[i],sol[i-1],boundary,X,Boundarytype,lmbda)   
@@ -221,17 +221,74 @@ def backwardseuler(T,X,innitial,boundary=lambda  X,t : 0,Boundarytype="dir"):
             sol[i]= TDMAsolver(d,side,side,sol[i])
     else:  
         for i in range(1,len(T)):
-            sol[i-1]= applycond(T[i],sol[i-1],boundary,X,Boundarytype,lmbda) 
+            sol[i]= applycond(T[i],sol[i-1],boundary,X,Boundarytype,lmbda)
+            np.reshape(sol[i-1],(L,L))
             #ydiff=(1/dims)*linalg.solve(M, np.reshape(sol[i-1],(L,L)).T.flatten(), assume_a='sym')
             ydiff = TDMAsolver(side,d,side,np.reshape(sol[i-1],(L,L)).T.flatten()) 
-            sol[i]+=np.reshape(ydiff,(L,L)).T.flatten()/2*dims
+            sol[i][L:-L]+=(np.reshape(ydiff,(L,L)).T.flatten()/(2*dims))[L:-L]
             #sol[i]+=(1/dims)*linalg.solve(M, sol[i-1], assume_a='sym')
-            sol[i]+=TDMAsolver(side,d,side,sol[i-1])/2*dims
+            sol[i][L:-L]+=(TDMAsolver(side,d,side,sol[i-1][L:-L])/(2*dims))[L:-L]
     sol=customreshape(shape,sol)
     return sol
 
+def ADI(T,X,innitial,boundary=lambda  X,t : 0,Boundarytype="dir"):
+    
+    [T,sol,lmbda,shape,sqrt,X,dims]=setuppde(T,X,innitial)
+    dx=X[0][0]-X[1][0]
+    L=shape[0]
+    #sqrt number of values on 1 edge of square domain
+    #deriv matrix stuff
+    #sqrt+=1
+    #magic numbers from "inspiration code"
+    """
+    d = -(2+(dx**2)/(beta*dt))
+    B = (2*((dx/dy)**2)-((dx**2)/(beta*dt)))
 
-
+    e = -(2+(dy**2)/(beta*dt))
+    C = (2*((dy/dx)**2)-((dy**2)/(beta*dt)))
+    im assuming square so
+    dy/dx=dx/dy=1
+    beta = kappa?
+    (dx**2)/(beta*dt)=1/lmbda?
+    d=-(2+1/lmbda)
+    B=2-1/lmbda
+    e=d
+    C=B
+    """
+    magicnumber=-(2+1/lmbda)
+    magicnumber2=2-1/lmbda
+    d=np.ones(L-2) * magicnumber 
+    side= np.ones(L-2-1)
+    tsteps=len(T)-1#tsteps= int(len(T)/2)#each half step is step
+    #sol[0]=applycond(T[0],sol[0],boundary,X,Boundarytype,lmbda)
+    
+    for t in range(tsteps):
+        sol[t]=applycond(T[t],sol[t],boundary,X,Boundarytype,lmbda)#imperative conditions are applied before
+        print(t)
+        tsol=np.reshape(sol[t],(L,L))
+        #loops kept seperate for ease of later expansion
+        for i in range(1,L-1):#Xloop
+            xtarr=tsol[i,1:-1]*magicnumber2-(tsol[i-1,1:-1]+tsol[i+1,1:-1])
+            #xtarr[0]-=tsol[i,0]
+            #xtarr[-1]-=tsol[i,-1]
+            b1=tsol[i,0]
+            b2=tsol[i,-1]
+            tsol[i,1:-1]=TDMAsolver(side,d,side,xtarr)
+            tsol[i,-1]=b2
+            tsol[i,0]=b1
+        for j in range(1,L-1):#Yloop
+            ytarr=tsol[1:-1,j]*magicnumber2-(tsol[1:-1,j-1]+tsol[1:-1,j+1])
+            #ytarr[0]-=tsol[0,j]
+            #ytarr[-1]-=tsol[-1,j]
+            b1=tsol[0,j]
+            b2=tsol[-1,j]
+            tsol[1:-1,j]=TDMAsolver(side,d,side,ytarr)
+            tsol[-1,j]=b2
+            tsol[0,j]=b1
+        sol[t+1]=tsol.flatten()
+    sol=customreshape(shape,sol)
+    print(np.shape(sol))
+    return sol
 
 def transposer(A,L):
     A=np.reshape(A,(L,L)).T.flatten()
@@ -316,14 +373,15 @@ def animatepde(X,save=False,path=None):
     plt.show()
 
 if __name__ == "__main__":
-    dx=40
-    coords = np.linspace(0,L,dx)
+    #dx=50
+    #coords = np.linspace(0,L,dx)
     
-    tvals = np.linspace(0,T,300)
-    coords=create2dgrid(0,L,dx)
+    tvals = np.linspace(0,T,2400)
+    coords=create2dgrid(0,L,75)
     
-    X=backwardseuler(tvals,coords,u_I2d)
-    animatepde(X,save=True)#[:,1:dx,1:dx]
+    #X=backwardseuler(tvals,coords,u_I2d)
+    X=ADI(tvals,coords,u_I2d)
+    animatepde(X,save=False)#[:,1:dx,1:dx]
     #animatepde(X)
     plt.show()
 
