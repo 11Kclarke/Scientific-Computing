@@ -10,11 +10,12 @@ from matplotlib import animation
 import scipy.linalg as linalg
 from scipy import sparse
 import sys
+
 np.set_printoptions(threshold=np.inf)
 # Set problem parameters/functions
-kappa = 0.2   # diffusion constant
+kappa = 0.4   # diffusion constant
 L=4       # length of spatial domain
-T=32      # total time to solve for
+T=5      # total time to solve for
 def u_I(x):
     # initial temperature distribution
     #y = np.sin(pi*x/L)
@@ -38,7 +39,7 @@ def u_exact(x,t):
 def u_I2d(x):
     # initial temperature distribution
     
-    return 4*(np.sin(x[1])**2+np.cos(x[0])**2)
+    #return 4*(np.sin(x[1])**2+np.cos(x[0])**2)
     
     return 0
  
@@ -126,7 +127,7 @@ def setuppde(T,X,innitial):
     i=0
     while (X[i+1]-X[i] == 0) or (T[i+1]-T[i] == 0): 
         i+=1
-    lmbda = kappa*(T[i+1]-T[i])/(((X[i+1]-X[i]))**2)
+    lmbda = kappa*(T[i+1]-T[i])/((dims*(X[i+1]-X[i]))**2)
     X=temp
     sqrt = int((2*mx)**1/2)
     print("\npre proccessing done\n")
@@ -231,7 +232,7 @@ def backwardseuler(T,X,innitial,boundary=lambda  X,t : 1,Boundarytype="dir"):
     sol=customreshape(shape,sol)
     return sol
 
-def ADI(T,X,innitial,boundary=lambda  X,t : 0,Boundarytype="dir"):
+def ADI(T,X,innitial,boundary=lambda  X,t : 1,Boundarytype="dir"):
     
     [T,sol,lmbda,shape,sqrt,X,dims]=setuppde(T,X,innitial)
     dx=X[0][0]-X[1][0]
@@ -239,7 +240,7 @@ def ADI(T,X,innitial,boundary=lambda  X,t : 0,Boundarytype="dir"):
     #sqrt number of values on 1 edge of square domain
     #deriv matrix stuff
     #sqrt+=1
-    #magic numbers from "inspiration code"
+    #magic numbers from "inspiration" code
     """
     d = -(2+(dx**2)/(beta*dt))
     B = (2*((dx/dy)**2)-((dx**2)/(beta*dt)))
@@ -376,12 +377,23 @@ if __name__ == "__main__":
     #dx=50
     #coords = np.linspace(0,L,dx)
     
-    tvals = np.linspace(0,T,2400)
-    coords=create2dgrid(0,L,75)
+    tvals = np.linspace(0,T,1000)
+    coords=create2dgrid(0,L,80)
     
+
     #X=backwardseuler(tvals,coords,u_I2d)
     X=ADI(tvals,coords,u_I2d)
-    animatepde(X,save=False)#[:,1:dx,1:dx]
+    temp=[]
+    c=0
+    n=1
+    for i in X:
+        c+=1
+        if c%n==0:
+            temp.append(i)
+        if c%400==0:
+            n+=1
+    X=np.array(temp)
+    animatepde(X,save=True)#[:,1:dx,1:dx]
     #animatepde(X)
     plt.show()
 
