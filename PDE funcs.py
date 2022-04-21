@@ -2,6 +2,7 @@ from xml import dom
 import numpy as np
 import pylab as pl
 from math import pi
+
 import sympy as sp
 from sympy.utilities.lambdify import lambdify
 import matplotlib.pyplot as plt
@@ -15,7 +16,7 @@ np.set_printoptions(threshold=np.inf)
 # Set problem parameters/functions
 kappa = 0.4   # diffusion constant
 L=4       # length of spatial domain
-T=5      # total time to solve for
+T=24      # total time to solve for
 def u_I(x):
     # initial temperature distribution
     #y = np.sin(pi*x/L)
@@ -89,11 +90,11 @@ def customreshape(shape,sol):
     solshaped=[]
     L=int(len(sol[0])**(1/2))
     if len(shape)>1:
-        for i in range(1,len(sol)):
+        for i in range(len(sol)):
             #i flattened list of spatial stuff at time i
             soli=sol[i].reshape(L,L)
-            #solshaped.append(soli[1:-1,1:-1])
-            solshaped.append(soli[2:-2,2:-2])
+            solshaped.append(soli)
+            #solshaped.append(soli[2:-2,2:-2])
         sol=np.array(solshaped)
     return sol
 def setuppde(T,X,innitial):
@@ -209,6 +210,7 @@ def backwardseuler(T,X,innitial,boundary=lambda  X,t : 1,Boundarytype="dir"):
     [T,sol,lmbda,shape,sqrt,X,dims]=setuppde(T,X,innitial)
     L=shape[0]
     print(dims)
+    
     k=1
     side=np.array([-lmbda]*(sqrt-k))
     d = np.array([1+2*lmbda]*(sqrt))
@@ -216,19 +218,34 @@ def backwardseuler(T,X,innitial,boundary=lambda  X,t : 1,Boundarytype="dir"):
     #M=d1+d2+d
     sol[0]= applycond(T[0],sol[0],boundary,X,Boundarytype,lmbda)
     if dims==1:
+
         for i in range(1,len(T)):
             sol[i-1]= applycond(T[i],sol[i-1],boundary,X,Boundarytype,lmbda)   
             #sol[i]+=(linalg.solve(M, sol[i-1], assume_a='sym'))
             sol[i]= TDMAsolver(d,side,side,sol[i])
     else:  
         for i in range(1,len(T)):
+            print(i)
             sol[i]= applycond(T[i],sol[i-1],boundary,X,Boundarytype,lmbda)
-            np.reshape(sol[i-1],(L,L))
+            soli=np.reshape(sol[i],(L,L))
+            lb=sol[i][0:L]
+            rb=sol[i][-L:]
+            hb=sol[i][0:L]
+            lowerb=sol[i][-L:]
+            
+            
             #ydiff=(1/dims)*linalg.solve(M, np.reshape(sol[i-1],(L,L)).T.flatten(), assume_a='sym')
-            ydiff = TDMAsolver(side,d,side,np.reshape(sol[i-1],(L,L)).T.flatten()) 
-            sol[i][L:-L]+=(np.reshape(ydiff,(L,L)).T.flatten()/(2*dims))[L:-L]
-            #sol[i]+=(1/dims)*linalg.solve(M, sol[i-1], assume_a='sym')
-            sol[i][L:-L]+=(TDMAsolver(side,d,side,sol[i-1][L:-L])/(2*dims))[L:-L]
+            xdiff = TDMAsolver(side,d,side,sol[i])
+            ydiff = TDMAsolver(side,d,side,soli.T.flatten())
+            xdiff[0:L]=lb
+            xdiff[-L:]=rb
+            ydiff[0:L]=hb
+            ydiff[-L:]=lowerb
+            diff= np.reshape(ydiff,(L,L)).T.flatten()+xdiff
+            diff=xdiff+ydiff
+            diff=diff/(dims)
+            sol[i]=diff
+            
     sol=customreshape(shape,sol)
     return sol
 
@@ -240,11 +257,10 @@ def ADI(T,X,innitial,boundary=lambda  X,t : 1,Boundarytype="dir"):
     #sqrt number of values on 1 edge of square domain
     #deriv matrix stuff
     #sqrt+=1
-    #magic numbers from "inspiration" code
+    #magic numbers from "inspiration code"
     """
     d = -(2+(dx**2)/(beta*dt))
     B = (2*((dx/dy)**2)-((dx**2)/(beta*dt)))
-
     e = -(2+(dy**2)/(beta*dt))
     C = (2*((dy/dx)**2)-((dy**2)/(beta*dt)))
     im assuming square so
@@ -258,8 +274,8 @@ def ADI(T,X,innitial,boundary=lambda  X,t : 1,Boundarytype="dir"):
     """
     magicnumber=-(2+1/lmbda)
     magicnumber2=2-1/lmbda
-    d=np.ones(L-2) * magicnumber 
-    side= np.ones(L-2-1)
+    d=np.ones(L) * magicnumber 
+    side= np.ones(L-1)
     tsteps=len(T)-1#tsteps= int(len(T)/2)#each half step is step
     #sol[0]=applycond(T[0],sol[0],boundary,X,Boundarytype,lmbda)
     
@@ -269,25 +285,27 @@ def ADI(T,X,innitial,boundary=lambda  X,t : 1,Boundarytype="dir"):
         tsol=np.reshape(sol[t],(L,L))
         #loops kept seperate for ease of later expansion
         for i in range(1,L-1):#Xloop
-            xtarr=tsol[i,1:-1]*magicnumber2-(tsol[i-1,1:-1]+tsol[i+1,1:-1])
+            xtarr=tsol[i,:]*magicnumber2-(tsol[i-1,:]+tsol[i+1,:])
             #xtarr[0]-=tsol[i,0]
             #xtarr[-1]-=tsol[i,-1]
             b1=tsol[i,0]
             b2=tsol[i,-1]
-            tsol[i,1:-1]=TDMAsolver(side,d,side,xtarr)
+            tsol[i,:]=TDMAsolver(side,d,side,xtarr)
             tsol[i,-1]=b2
             tsol[i,0]=b1
+        
         for j in range(1,L-1):#Yloop
-            ytarr=tsol[1:-1,j]*magicnumber2-(tsol[1:-1,j-1]+tsol[1:-1,j+1])
+            ytarr=tsol[:,j]*magicnumber2-(tsol[:,j-1]+tsol[:,j+1])
             #ytarr[0]-=tsol[0,j]
             #ytarr[-1]-=tsol[-1,j]
             b1=tsol[0,j]
             b2=tsol[-1,j]
-            tsol[1:-1,j]=TDMAsolver(side,d,side,ytarr)
-            tsol[-1,j]=b2
-            tsol[0,j]=b1
+            tsol[:,j]=TDMAsolver(side,d,side,ytarr)
+            tsol[0,j]=b2
+            tsol[-1,j]=b1
         sol[t+1]=tsol.flatten()
     sol=customreshape(shape,sol)
+    print(L)
     print(np.shape(sol))
     return sol
 
@@ -311,11 +329,10 @@ def applycond (t,sol,boundary,X,boundarytype,lmda):
     
     if boundarytype=="dir":
         for d in range(dims):
-            
             for i in range(0,sidelength):
-                sol[i*((sidelength)**d)]+=lmda*boundary(X[i*((sidelength)**d)],t)#close boundary on axis d
+                sol[i*((sidelength)**d)]=lmda*boundary(X[i*((sidelength)**d)],t)#close boundary on axis d
                 
-                sol[(-i*((sidelength)**d))-1]+=lmda*boundary(X[(-i*((sidelength)**d))-1],t)#far boundary on axis d
+                sol[(-i*((sidelength)**d))-1]=lmda*boundary(X[(-i*((sidelength)**d))-1],t)#far boundary on axis d
                 #sol[(-i*(sidelength)**d)-1]+=lmda*boundary(X[(-i*(sidelength)**d)-1],t)#this is how i should have created the deriv matrices would have been cleaner
         
     elif boundarytype =="periodic":#if periodic with no heat source use func that always gives 0, ie default
@@ -329,8 +346,7 @@ def applycond (t,sol,boundary,X,boundarytype,lmda):
         for i in range(len(sol)):
             print("domain wide application")
             sol[i]+=lmda*boundary(X[i],t) 
-    sol[0]=sol[sidelength]
-    sol[-1]=sol[-sidelength-1]
+    
     return sol
 
 
@@ -370,15 +386,15 @@ def animatepde(X,save=False,path=None):
             face_id+=1
         f=path+"\\PDE_Anim"+str(face_id)+".gif"
         print(f)
-        anim.save(f, writer='imagemagick',fps=30,progress_callback=lambda i, n: print(i))
+        anim.save(f, writer='imagemagick',fps=30,progress_callback=lambda i, n: print(str(i)+" / "+str(X.shape[0])+" frames "))
     plt.show()
 
 if __name__ == "__main__":
     #dx=50
     #coords = np.linspace(0,L,dx)
     
-    tvals = np.linspace(0,T,1000)
-    coords=create2dgrid(0,L,80)
+    tvals = np.linspace(0,T,300)
+    coords=create2dgrid(0,L,100)
     
 
     #X=backwardseuler(tvals,coords,u_I2d)
@@ -392,8 +408,10 @@ if __name__ == "__main__":
             temp.append(i)
         if c%400==0:
             n+=1
+
     X=np.array(temp)
-    animatepde(X,save=True)#[:,1:dx,1:dx]
+    print(X[0].shape)
+    animatepde(X,save=False)#[:,1:dx,1:dx]
     #animatepde(X)
     plt.show()
 

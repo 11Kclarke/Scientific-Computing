@@ -1,4 +1,5 @@
 
+from more_itertools import last
 import sympy as sp
 import numpy as np
 from sympy.utilities.lambdify import lambdify
@@ -23,8 +24,9 @@ def rk4step(f,x,stepsize,t):
     k4 = h*f(t+h,x+h*k3)
     return 1/6*(k1+2*k2+2*k3+k4)
        
-
-def Solve_ode(f,tvals,y0,method=euler_step,event=None):
+def wrapperforfsolveevent(t,f=None,sol=None,lastt=None,event=None):
+    event(Solve_to(f,sol,lastt,t))
+def Solve_ode(f,tvals,y0,method=rk4step,event=None):
     steps = len(tvals)
     print(y0)
     sol = np.zeros(shape=(len(y0),steps)).T  
@@ -36,13 +38,19 @@ def Solve_ode(f,tvals,y0,method=euler_step,event=None):
             sol[i+1]=method(f,sol[i],tvals[i+1]-tvals[i],tvals[i])+sol[i]
             if np.sign(event(sol[i+1],tvals[i])) != sign:
                 sign=np.sign(event(sol[i+1],tvals[i]))#if event has sign change event must have happened
-                if t[0]-t[1] >1*10**(-15):
-                    inbetweensteps = Solve_to(f,sol[i],tvals[i],tvals[i+1],deltat_max=1*10**(-15),method=rk4step,event=event)#replace deltattmax with maximum effective accuraccy 
+                tguess=(tvals[i]+tvals[i-1])/2
+                def wrapperforfsolveevent(t,f=f,sol=sol[i],lastt=tvals[i-1],event=event):
+                    
+                    return event(Solve_to(f,sol,lastt,t)[0][-1],t)
+                eventT.append(fsolve(wrapperforfsolveevent,tguess))
+                
+                """ if t[0]-t[1] >1*10**(-15):
+                    inbetweensteps = Solve_to(f,sol[i],tvals[i],tvals[i+1],method=rk4step,event=event)#replace deltattmax with maximum effective accuraccy 
                 #Solves ode between steps at maximum accuracy to find more exact event locations
                 for i in inbetweensteps:
                     if abs(event(i[0],i[1]))<1*10**(-14):
                         eventT.append(i[1])
-                        break#if theres multiple sign change in this sign change this causes to miss them.
+                        break#if theres multiple sign change in this sign change this causes to miss them."""
         return [sol,eventT]    
     for i in range(steps-1):
         sol[i+1]=method(f,sol[i],tvals[i+1]-tvals[i],tvals[i])+sol[i]
@@ -50,8 +58,9 @@ def Solve_ode(f,tvals,y0,method=euler_step,event=None):
     return sol
 
 
-def Solve_to(f,x0,t0,tn,deltat_max=0.01,method=rk4step,initialvalue = True ,t_innitial_condition = None,event=None):
-    
+def Solve_to(f,x0,t0,tn,deltat_max=None,method=rk4step,initialvalue = True ,t_innitial_condition = None,event=None):
+    if deltat_max ==None:
+        deltat_max=(t0-tn)/150
     if type(f)==str:
         f= sp.lambdify([x,t],sp.parse_expr(f))
     
@@ -121,38 +130,60 @@ def numericalcount(f,X0,parrange,step_size=0.01, solver=fsolve):
     if max_steps<0:
         step_size=step_size*-1
         max_steps=max_steps*-1
-    sol = np.zeros(shape=(len(X0),max_steps)).T
+    #sol = np.zeros(shape=(len(X0),max_steps)).T
+    sol=[X0]
     par=np.linspace(parrange[0],parrange[1],max_steps)  
-    sol[0] = X0
+    #sol[0] = 
     for i in range(max_steps-1):
-        sol[i+1]=solver(f,sol[i],args=(par[i]))
-    return par,sol
+        solati = solver(f,sol[i],args=(par[i]))
+        #print(solver(f,sol[i],args=(par[i])))
+        sol.append(solati)
+    return par,np.array(sol)
 
 def arclengthcountinuation(f,X0,X1,parrange,step_size=0.01, solver=fsolve):
     max_steps = int((parrange[0]-parrange[1])/step_size)
     if max_steps<0:
         step_size=step_size*-1
         max_steps=max_steps*-1
-    sol = np.zeros(shape=(len(X0),max_steps)).T
-    sol[0]=X0
-    sol[1]=X1
+    #sol = np.zeros(shape=(len(X0),max_steps)).T
+    #sol[0]=X0
+    #sol[1]=X1
+    if len(X0)==1:
+        X0=X0[0]
+        X1=X1[0]
+    sol=[X0,X1]
+    print(sol)
     par=np.linspace(parrange[0],parrange[1],max_steps)
-
+    sol=np.array(sol).flatten()
     def G(X2,X1,X0,par):#takes 2 previous values to guess new 
+        print(X2)
         secant = X1-X0
         Xprime = X1+secant
-        print(np.dot(secant,X2-Xprime))
+        #print(np.dot(secant,X2-Xprime))
+        dot=float(np.dot(secant,X2-Xprime))
+        feval= float(f(X2,par))
         #print(np.array([np.dot(secant,X2-Xprime),*f(X2,par)],dtype=object))
-        return np.array([np.dot(secant,X2-Xprime),(f(X2,par))],dtype=object)
+        #print(np.shape(dot))
+        #print(np.shape(feval))
+        #print(np.shape(np.array([dot,feval])))
+        return np.array([dot,feval])
     for i in range(max_steps-1):
-
-        sol[i+2]=fsolve(G,sol[i+1],args=(sol[i+1],sol[i],par[i]))
-        
+        #print(np.shape(sol))
+        print(type(sol[i+1]))
+        print(type(sol[i]))
+        #print(np.shape(G(sol[i+1],sol[i+1],sol[i],par[i])))
+        #print((G(sol[i+1],sol[i+1],sol[i],par[i])))
+        print("fsolve   ")
+        np.append(sol,fsolve(G,sol[i+1],args=(sol[i+1],sol[i],par[i]))) 
+        print("out of fsolve")
     return sol
 
-def wrapperforfsolve(F,X):
+def wrapperforfsolve_no_t(X,F=None):
     return F(0,X)
-
+def wrapperforfsolve_yes_t(X,F=None):
+    t=X[0]
+    X=X[1:]
+    return F(t,X)
 """inputs Bellow"""
 
 
@@ -206,13 +237,18 @@ def fsolvenotshit(f,numsolutions,domain,params=None,checks=10):
 
 
 def poly(X,param=1):
-    return np.array([X**2+param*X+1])
+    print(type(X))
+    X=X[0]
+    print(type(X))
+    print(np.shape(X**2+param*X+param))
+    print(X**2+param*X+param)
+    return X**2+param*X+param
 if __name__ == "__main__":
     #b= findcycle([1,2,3],mass_spring)
     
     fig, axs = plt.subplots(2)
-    #sol=arclengthcountinuation(hopf,[1,1],[1.1,1.1],(1,2))
-    sol=numericalcount(poly,[1],(-2,2))
+    sol=arclengthcountinuation(poly,[1],[1.1],(-2,2))
+    #sol=numericalcount(poly,[1],(-2,2))
     #sol = solve_ivp(mass_spring,(0,1),-2,2,max_step = 0.01)
     #(xvals,tvals)=Solve_to(drdt,[1,0],-10,10)
     #print(b)
@@ -227,8 +263,8 @@ if __name__ == "__main__":
     (xvals,fvals)=sol
     print(np.shape(xvals))
     print(np.shape(fvals[:,0]))
-    axs[0].plot(xvals,fvals[:,0])
-    axs[1].plot(fvals[:,0],fvals[:,1])
+    axs[0].plot(xvals,fvals)
+    axs[1].plot(fvals)
     for i in axs:
         i.grid()
     #original = f(tvals,0)

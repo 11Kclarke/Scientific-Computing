@@ -15,4 +15,7 @@ def animate(i):
     sns.heatmap(data, vmax=.8, square=False, cbar=False)
 
 anim = animation.FuncAnimation(fig, animate, init_func=init, frames=20, repeat = False)
+
+
+
 plt.show()
