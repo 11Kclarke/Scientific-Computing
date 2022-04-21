@@ -125,7 +125,7 @@ def findcycle(X,f,t0=0,period=None,phasecond=lambda  y : y[1]):
 
 def numericalcount(f,X0,parrange,step_size=0.01, solver=fsolve):
     max_steps = int((parrange[0]-parrange[1])/step_size)
-    #add somthing that masks any function with a t parameter to same function with no t or t included in X
+    #add somthing that masks any function with  a t parameter to same function with no t or t included in X
     #needed for consistency
     if max_steps<0:
         step_size=step_size*-1
@@ -240,15 +240,15 @@ def poly(X,param=1):
     print(type(X))
     X=X[0]
     print(type(X))
-    print(np.shape(X**2+param*X+param))
+    print(np.shape(X**2+X+param))
     print(X**2+param*X+param)
-    return X**2+param*X+param
+    return X**2+X+param
 if __name__ == "__main__":
     #b= findcycle([1,2,3],mass_spring)
     
     fig, axs = plt.subplots(2)
-    sol=arclengthcountinuation(poly,[1],[1.1],(-2,2))
-    #sol=numericalcount(poly,[1],(-2,2))
+    #sol=arclengthcountinuation(poly,[1],[1.1],(-2,2))
+    sol=numericalcount(poly,[1],(-2,2))
     #sol = solve_ivp(mass_spring,(0,1),-2,2,max_step = 0.01)
     #(xvals,tvals)=Solve_to(drdt,[1,0],-10,10)
     #print(b)
