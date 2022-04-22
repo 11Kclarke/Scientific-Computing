@@ -16,7 +16,7 @@ np.set_printoptions(threshold=np.inf)
 # Set problem parameters/functions
 kappa = 0.4   # diffusion constant
 L=4       # length of spatial domain
-T=50      # total time to solve for
+T=40      # total time to solve for
 def u_I(x):
     # initial temperature distribution
     #y = np.sin(pi*x/L)
@@ -31,10 +31,10 @@ def u_exact(x,t):
 def u_I2d(x):
     # initial temperature distribution
     
-    #return (2*np.sin(np.pi*x[1]/4*L)+2*np.cos(np.pi*x[0]/4*L))
+    return (2*np.sin(np.pi*x[1]/4*L)+2*np.cos(np.pi*x[0]/4*L))
     #if x[0]==0 or x[0]==L:
         #return 5
-    return 0
+    #return 0
 
 
 """
@@ -96,7 +96,7 @@ def customreshape(shape,sol):
             #i flattened list of spatial stuff at time i
             soli=sol[i].reshape(L,L)
             #solshaped.append(soli)
-            solshaped.append(soli[2:-2,2:-2])
+            solshaped.append(soli[1:-1,1:-1])
         sol=np.array(solshaped)
     return sol
 def setuppde(T,X,innitial):
@@ -251,7 +251,7 @@ def backwardseuler(T,X,innitial,boundary=lambda  X,t : 1,Boundarytype=["dir"]):
     sol=customreshape(shape,sol)
     return sol
 
-def ADI(T,X,innitial,boundary=lambda  X,t : 0,Boundarytype=["periodicx"]):
+def ADI(T,X,innitial,boundary=lambda  X,t : 1,Boundarytype=["dir+"]):
     
     [T,sol,lmbda,shape,sqrt,X,dims]=setuppde(T,X,innitial)
     dx=X[0][0]-X[1][0]
@@ -278,15 +278,17 @@ def ADI(T,X,innitial,boundary=lambda  X,t : 0,Boundarytype=["periodicx"]):
     magicnumber2=2-1/lmbda
     d=np.ones(L) * magicnumber 
     side= np.ones(L-1)
-    tsteps=len(T)-1#tsteps= int(len(T)/2)#each half step is step
+    tsteps=len(T)-1#
+    #tsteps= int(len(T)/2)#each half step is step
     #sol[0]=applycond(T[0],sol[0],boundary,X,Boundarytype,lmbda)
     
     for t in range(tsteps):
         sol[t]=applycond(T[t],sol[t],boundary,X,Boundarytype,lmbda)#imperative conditions are applied before
+        sol[t]=applycond(T[t],sol[t],boundary,X,Boundarytype,lmbda)#as adi does 2 steps in one certain boundary stuff needs to be double applied
         print(t)
         tsol=np.reshape(sol[t],(L,L))
         #loops kept seperate for ease of later expansion
-        for i in range(1,L-1):#Xloop
+        for i in range(0,L-1):#Xloop
             xtarr=tsol[i,:]*magicnumber2-(tsol[i-1,:]+tsol[i+1,:])
             #xtarr[0]-=tsol[i,0]
             #xtarr[-1]-=tsol[i,-1]
@@ -296,16 +298,17 @@ def ADI(T,X,innitial,boundary=lambda  X,t : 0,Boundarytype=["periodicx"]):
             tsol[i,-1]=b2
             tsol[i,0]=b1
         
-        for j in range(1,L-1):#Yloop#reversed this loops direction
+        for j in range(0,L-1):#Yloop#reversed this loops direction
             ytarr=tsol[:,j]*magicnumber2-(tsol[:,j-1]+tsol[:,j+1])
             #ytarr[0]-=tsol[0,j]
             #ytarr[-1]-=tsol[-1,j]
             b1=tsol[0,j]
             b2=tsol[-1,j]
             tsol[:,j]=TDMAsolver(side,d,side,ytarr)
-            tsol[0,j]=b2
-            tsol[-1,j]=b1
+            tsol[0,j]=b1
+            tsol[-1,j]=b2
         sol[t+1]=tsol.flatten()
+        
     sol=customreshape(shape,sol)
     print(L)
     print(np.shape(sol))
@@ -340,16 +343,17 @@ def applycond (t,sol,boundary,X,boundarytype,lmda):
         for d in range(dims):
             
             for i in range(0,sidelength):
-                sol[i*((sidelength)**d)]+=lmda*boundary(X[i*((sidelength)**d)],t)#close boundary on axis d
                 
-                sol[(-i*((sidelength)**d))-1]+=lmda*boundary(X[(-i*((sidelength)**d))-1],t)#far boundary on axis d
+                sol[(i)*(sidelength**d)]+=lmda*boundary(X[(i)*(sidelength**d)],t)#close boundary on axis d
+                
+                sol[(-(i)*((sidelength)**d))-1]+=lmda*boundary(X[(-(i)*((sidelength)**d))-1],t)#far boundary on axis d
     elif "dir" in boundarytype:
         for d in range(dims):
             for i in range(0,sidelength):
+                
                 sol[i*((sidelength)**d)]=lmda*boundary(X[i*((sidelength)**d)],t)#close boundary on axis d
                 
-                sol[(-i*((sidelength)**d))-1]=lmda*boundary(X[(-i*((sidelength)**d))-1],t)#far boundary on axis d
-                #sol[(-i*(sidelength)**d)-1]+=lmda*boundary(X[(-i*(sidelength)**d)-1],t)#this is how i should have created the deriv matrices would have been cleaner
+                sol[(-i*((sidelength)**d))-1]=lmda*boundary(X[(-i*((sidelength)**d))-1],t)#far boundary on axis 
     
     if "heatsource" in boundarytype:
         #print("domain wide application")
@@ -358,18 +362,31 @@ def applycond (t,sol,boundary,X,boundarytype,lmda):
     if "periodicy" in boundarytype or "periodicx" in boundarytype:#if periodic with no heat source use func that always gives 0, ie default
         #print("periodic")
         dimlist=[]
+        
+        side= np.ones(sidelength-1)
         if "periodicx" in boundarytype:
             dimlist.append(0)
         if "periodicy" in boundarytype:
-            dimlist.append(1)    
-        for d in dimlist:
-            #print(d)
-            for i in range(sidelength):
-                #sol[i*(sidelength)**d]=sol[(-i*(sidelength)**d)-1]
-                side1=sol[i*(sidelength)**d]
-                side2=sol[(-i*((sidelength)**d))-1]#sol[-(sidelength-1)+i*(sidelength)**d]
-                sol[i*(sidelength)**d]=(side1+side2)/2
-                sol[(-i*((sidelength)**d))-1]=sol[i*(sidelength)**d]
+            dimlist.append(1)
+        for ree in range(1):    
+            for d in dimlist:
+                for i in range(1,sidelength-2):
+                    #sol[i*(sidelength)**d]=sol[(-i*(sidelength)**d)-1]
+                    #i+=2
+                    
+                    
+                    right = sol[(i)*(sidelength)**d]
+                    current = sol[-(i+1)*(sidelength)**d-1]
+                    left = sol[-(i+2)*(sidelength)**d-1]
+                    diff=lmda*(2*current-left-right)
+                    
+                    current = sol[(i)*(sidelength)**d]
+                    left = sol[-(i)*(sidelength)**d-1]
+                    right = sol[(i+1)*(sidelength)**d]
+                    sol[(i)*(sidelength)**d]-=lmda*(2*current-left-right)
+                    sol[-(i+1)*(sidelength)**d-1]-=diff
+                    
+                    
     return sol
 
 
@@ -415,20 +432,18 @@ def animatepde(X,save=False,path=None):
 def exampleheatsource(x,t,L=L,T=T):
     y=x[1]/L
     x=x[0]/L
-    if (x>0.2 and x < 0.3) and (y>0.2 and y < 0.3):
-        return 5+t
-    if (x>0.4 and x < 0.5) and (y>0.4 and y < 0.5):
-        return -1.9*(5+t)
-    if (x>0.6 and x < 0.7) and (y>0.6 and y < 0.7):
-        return t+5
+    if (y>0.1 and y < 0.2) and (x>0.2 and x < 0.8):
+        return 4
     else:
         return 0
+        
 if __name__ == "__main__":
-    tvals = np.linspace(0,T,3600)
-    coords=create2dgrid(0,L,100)
+    tvals = np.linspace(0,T,500)
+    coords=create2dgrid(0,L,30)
     #tvals = np.linspace(0,T,600)
-    #coords=create2dgrid(0,L,40)
-    X=ADI(tvals,coords,u_I2d,boundary=exampleheatsource,Boundarytype=["periodicx","heatsource","periodicy"])
+    #coords=create2dgrid(0,L,31)
+    X=ADI(tvals,coords,u_I2d,boundary=exampleheatsource,Boundarytype=["periodicy"])
+    #X=ADI(tvals,coords,u_I2d)
     temp=[]
     c=0
     n=2
@@ -436,11 +451,12 @@ if __name__ == "__main__":
         c+=1
         if c%n==0:
             temp.append(i)
-        if c%600==0:
+        if c%500==0:
             n+=1
     X=np.array(temp)
-    animatepde(X,save=True)#[:,1:dx,1:dx]
-    #animatepde(X)
+    
+    animatepde(X,save=False)#[:,1:dx,1:dx]
+    
     plt.show()
 
     

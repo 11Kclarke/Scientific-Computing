@@ -131,52 +131,17 @@ def numericalcount(f,X0,parrange,step_size=0.01, solver=fsolve):
         step_size=step_size*-1
         max_steps=max_steps*-1
     #sol = np.zeros(shape=(len(X0),max_steps)).T
-    sol=[X0]
+    sol=np.array([X0])
     par=np.linspace(parrange[0],parrange[1],max_steps)  
     #sol[0] = 
     for i in range(max_steps-1):
-        solati = solver(f,sol[i],args=(par[i]))
+        sol=np.append(sol,solver(f,sol[i],args=(par[i])))
+        
         #print(solver(f,sol[i],args=(par[i])))
-        sol.append(solati)
+        
     return par,np.array(sol)
 
-def arclengthcountinuation(f,X0,X1,parrange,step_size=0.01, solver=fsolve):
-    max_steps = int((parrange[0]-parrange[1])/step_size)
-    if max_steps<0:
-        step_size=step_size*-1
-        max_steps=max_steps*-1
-    #sol = np.zeros(shape=(len(X0),max_steps)).T
-    #sol[0]=X0
-    #sol[1]=X1
-    if len(X0)==1:
-        X0=X0[0]
-        X1=X1[0]
-    sol=[X0,X1]
-    print(sol)
-    par=np.linspace(parrange[0],parrange[1],max_steps)
-    sol=np.array(sol).flatten()
-    def G(X2,X1,X0,par):#takes 2 previous values to guess new 
-        print(X2)
-        secant = X1-X0
-        Xprime = X1+secant
-        #print(np.dot(secant,X2-Xprime))
-        dot=float(np.dot(secant,X2-Xprime))
-        feval= float(f(X2,par))
-        #print(np.array([np.dot(secant,X2-Xprime),*f(X2,par)],dtype=object))
-        #print(np.shape(dot))
-        #print(np.shape(feval))
-        #print(np.shape(np.array([dot,feval])))
-        return np.array([dot,feval])
-    for i in range(max_steps-1):
-        #print(np.shape(sol))
-        print(type(sol[i+1]))
-        print(type(sol[i]))
-        #print(np.shape(G(sol[i+1],sol[i+1],sol[i],par[i])))
-        #print((G(sol[i+1],sol[i+1],sol[i],par[i])))
-        print("fsolve   ")
-        np.append(sol,fsolve(G,sol[i+1],args=(sol[i+1],sol[i],par[i]))) 
-        print("out of fsolve")
-    return sol
+
 
 def wrapperforfsolve_no_t(X,F=None):
     return F(0,X)
@@ -207,13 +172,7 @@ def drdt(X,param=0.1):
     theta =1 
     return np.array([a*r+r**3-r**5,theta])
 
-def hopf(U,param=1):
-    b=param
-    print(U)
-    print(param)
-    du1=b*U[0]-U[1]+U[0]*(U[0]**2+U[1]**2)-U[0]*(U[0]**2+U[1]**2)**2
-    du2=U[0]+b*U[1]+U[1]*(U[0]**2+U[1]**2)-U[1]*(U[0]**2+U[1]**2)**2
-    return np.array([du1,du2])
+
 def fsolvenotshit(f,numsolutions,domain,params=None,checks=10):
     
     #domain has 2 values for each dimension of fs input
@@ -234,37 +193,75 @@ def fsolvenotshit(f,numsolutions,domain,params=None,checks=10):
                 return [i for i in solutions if i]
     print("did not find intended number of solutions")
     return [i for i in solutions if i]
-
-
 def poly(X,param=1):
-    print(type(X))
-    X=X[0]
-    print(type(X))
-    print(np.shape(X**2+X+param))
-    print(X**2+param*X+param)
-    return X**2+X+param
+    p=np.array([float(X**2+param*X+param)])
+    return p
+def arclengthcountinuation(f,X0,X1,parrange,step_size=0.01, solver=fsolve):
+    max_steps = int((parrange[0]-parrange[1])/step_size)
+    if max_steps<0:
+        step_size=step_size*-1
+        max_steps=max_steps*-1
+    #sol = np.zeros(shape=(len(X0),max_steps)).T
+    #sol[0]=X0
+    #sol[1]=X1
+    
+    if len(X0)==1:
+        X0=X0[0]
+        X1=X1[0]
+    sol=[X0,X1]
+    print(sol)
+    par=np.linspace(parrange[0],parrange[1],max_steps)
+    
+    def G(X2,par,L):#takes 2 previous values to guess new 
+        print("\nin G")
+        print(X2)
+        X0=X2[0:L]
+        X1=X2[L:-1]
+        X2=X0
+        print(X0)
+        print(X1)
+        secant = X1-X0
+        Xprime = X1+secant
+        #print(np.dot(secant,X2-Xprime))
+        dot=np.dot(secant,X2-Xprime)
+        feval= f(X2,par)
+        g=np.array([dot,feval])
+        print(g)
+        return g
+    for i in range(max_steps-1):
+        print("here")
+        
+        input=[sol[i],sol[i+1]]
+        print(input)
+        sol=np.append(sol,fsolve(G,input,args=(par[i],len(sol[i]))))
+    temp=[]
+    for i in range(len(sol)):
+        if i%2==0:
+            temp.append(sol[i])
+    sol=np.array(temp)
+    return par,sol
+def hopf(U,param=1):
+    b=param
+    print("hopf")
+    print(U)
+    print(param)
+    du1=b*U[0]-U[1]+U[0]*(U[0]**2+U[1]**2)-U[0]*(U[0]**2+U[1]**2)**2
+    du2=U[0]+b*U[1]+U[1]*(U[0]**2+U[1]**2)-U[1]*(U[0]**2+U[1]**2)**2
+    return np.array([du1,du2])
 if __name__ == "__main__":
     #b= findcycle([1,2,3],mass_spring)
     
     fig, axs = plt.subplots(2)
-    #sol=arclengthcountinuation(poly,[1],[1.1],(-2,2))
-    sol=numericalcount(poly,[1],(-2,2))
-    #sol = solve_ivp(mass_spring,(0,1),-2,2,max_step = 0.01)
-    #(xvals,tvals)=Solve_to(drdt,[1,0],-10,10)
-    #print(b)
-    #print(tvals[-1])
-    #print(sol.t[-1])
-    #print(xvals[-1,:])
-    #print(sol.y[:,0])
-    #axs[0].plot(sol.t,sol.y[1,:])
-    #axs[0].plot(sol.t,sol.y[0,:])
-    #axs[1].plot(tvals,xvals[:,0])
-    #axs[1].plot(tvals,xvals[:,1])
+    asol=arclengthcountinuation(hopf,[1,1],[1.1,1.1],(-4,4))
+    sol=numericalcount(hopf,[1,1],(-4,4))
+    
     (xvals,fvals)=sol
-    print(np.shape(xvals))
-    print(np.shape(fvals[:,0]))
+    (axvals,afvals)=asol
+    #fvals=sol
+    #print(np.shape(xvals))
+    #print(np.shape(fvals[0]))
     axs[0].plot(xvals,fvals)
-    axs[1].plot(fvals)
+    axs[1].plot(axvals,afvals)
     for i in axs:
         i.grid()
     #original = f(tvals,0)
