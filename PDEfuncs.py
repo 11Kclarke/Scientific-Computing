@@ -90,14 +90,14 @@ def TDMAsolver(a, b, c, d):
     
 def customreshape(shape,sol):
     solshaped=[]
-    L=int(len(sol[0])**(1/2))
-    if len(shape)>1:
-        for i in range(len(sol)):
-            #i flattened list of spatial stuff at time i
-            soli=sol[i].reshape(L,L)
+    #L=int(len(sol[0])**(1/2))
+    #if len(shape)>1:
+    for i in range(len(sol)):
+        #i flattened list of spatial stuff at time i
+        soli=sol[i].reshape(shape[:-1])
             #solshaped.append(soli)
-            solshaped.append(soli[1:-1,1:-1])
-        sol=np.array(solshaped)
+        solshaped.append(soli[1:-1,1:-1])
+    sol=np.array(solshaped)
     return sol
 def setuppde(T,X,innitial):
     print("\npre proccessing started\n")
