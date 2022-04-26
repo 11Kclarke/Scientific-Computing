@@ -90,14 +90,14 @@ def TDMAsolver(a, b, c, d):
     
 def customreshape(shape,sol):
     solshaped=[]
-    #L=int(len(sol[0])**(1/2))
-    #if len(shape)>1:
-    for i in range(len(sol)):
-        #i flattened list of spatial stuff at time i
-        soli=sol[i].reshape(shape[:-1])
+    L=int(len(sol[0])**(1/2))
+    if len(shape)>1:
+        for i in range(len(sol)):
+            #i flattened list of spatial stuff at time i
+            soli=sol[i].reshape(L,L)
             #solshaped.append(soli)
-        solshaped.append(soli[1:-1,1:-1])
-    sol=np.array(solshaped)
+            solshaped.append(soli[1:-1,1:-1])
+        sol=np.array(solshaped)
     return sol
 def setuppde(T,X,innitial):
     print("\npre proccessing started\n")
@@ -318,7 +318,7 @@ def transposer(A,L):
     A=np.reshape(A,(L,L)).T.flatten()
 
 
-def applycond (t,sol,boundary,X,boundarytype,lmda):
+def applycond(t,sol,boundary,X,boundarytype,lmda):
     #applies a function of x and t to either edges of sol, or entire
     """A function used for boundary conditions or heat source should output
      1 temperature for 1 set of coordinates, and time. 
