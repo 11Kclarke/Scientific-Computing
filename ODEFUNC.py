@@ -104,6 +104,22 @@ def Solve_to(f,x0,t0,tn,deltat_max=None,method=rk4step,initialvalue = True ,t_in
     return  (Solve_ode(f,tvals,x0,method=method,event=event),tvals)
     
 
+def findroot(f,X0,methods=('hybr', 'lm'),args=None):
+    if args !=None:
+        #print(type(args))
+        for  i in range(len(methods)):
+            sol = root(f, X0, method=methods[i], args=args)
+            if sol.success:
+                return sol.x
+        print('No solution found with current method selection')
+        return None
+    else:
+        for  i in range(len(methods)):
+            sol = root(f, X0, method=methods[i])
+            if sol.success:
+                return sol.x
+        print('No solution found with current method selection')
+        return None
 
 
 
@@ -111,8 +127,7 @@ def Solve_to(f,x0,t0,tn,deltat_max=None,method=rk4step,initialvalue = True ,t_in
 
 
 
-
-def numericalcount(f,X0,parrange,step_size=0.01, solver=fsolve):
+def numericalcount(f,X0,parrange,step_size=0.01, solver=findroot):
     max_steps = int((parrange[1]-parrange[0])/step_size)
     #add somthing that masks any function with  a t parameter to same function with no t or t included in X
     #needed for consistency
@@ -123,15 +138,13 @@ def numericalcount(f,X0,parrange,step_size=0.01, solver=fsolve):
     
     sol=[X0]*max_steps
     par=np.linspace(parrange[0],parrange[1],max_steps)  
-    #sol[0] = 
-    
     for i in range(max_steps-1):
-        #print(sol[i])
+        print(sol[i])
         sol[i+1]=solver(f,sol[i],args=(par[i]))
         
         #print(solver(f,sol[i],args=(par[i])))
     sol=np.array(sol)
-    return np.array([par[:],sol[:,0]])
+    return sol
 
 
 
@@ -156,53 +169,48 @@ def drdt(X,param=0.1):
 
 
 def poly(X,param=-1):
-    p=np.array([float(((X+param*1)*(X+param*3)*(X+param*4)))])
-    #p=np.array([float((-param*X)**3+X**2+-4*X+param)])
+    #p=np.array([float(((X+param*1)*(X+param*3)*(X+param*4)))])
+    p=X**3-X+param
+    p=np.array([float(p)])
     return p
 
 
 
-def arclengthcountinuation(f,X0,X1,parrange,step_size=0.01, solver=fsolve,chaoticthreshold=100):
+def arclengthcountinuation(f,X0,X1,parrange,step_size=0.01, solver=findroot,chaoticthreshold=100):
     
     max_steps = int((parrange[1]-parrange[0])/step_size)
+    
+    par=np.linspace(parrange[0],parrange[1],max_steps+1)
     shape=np.shape(X0)
-    """if max_steps<0:
-        print("\n\n\n\n max steps less than 0 \n\n\n\n")
-        step_size=step_size*-1
-        max_steps=max_steps*-1"""
+    sol=[[0]*(shape[0]+1)]*max_steps
     if len(X0)==1:
-        print("\n\n1 d problem\n\n")
         shape=(1,)
-    sol=[[0]*shape[0]]*max_steps
-    sol[0]=X0
-    sol[1]=X1
-    
-    par=np.linspace(parrange[0],parrange[1],max_steps)
-    g=[]
-    while len(g)<=(shape[0]*2)-1:#fixes dim of output to dim of input
-            g.append(0)
-    def G(X2,par,g=g):#takes 2 previous values to guess new 
-        L=int(par[-1])
-        par=par[0]
-        X0=X2[0:L]
-        X1=X2[L:]
-        X2=X0
-        secant = X1-X0
-        Xprime = X1+secant
-        dot=np.dot(secant,X2-Xprime)
-        feval= f(X2,par)
-        #g=[dot,*feval]
-        g[0]=dot
-        for i in range(len(feval)):
-            g[1+i]=feval[i]
-        g=np.array(g).flatten()
-        return g
-    avg=chaoticthreshold**2
-    
+    print()
+    print(X0)
+    print(X1)
+    sol[0]=[*X0,par[0]]
+    sol[1]=[*X1,par[1]]
+    print(sol[0])
+    print(sol[1])
+    print()
+    sol=np.array(sol)
+    g=[0]*(shape[0]+1)
     for i in range(0,max_steps-2):
-        #soli,infodict,ier,mesg=solver(G,[sol[i],sol[i+1]],args=[par[i],shape[0]],factor=0.1,xtol=1e-10,full_output=True)
-        soli=solver(G,[sol[i+1],sol[i]],args=[par[i],shape[0]])
-       
+        secant = sol[i+1]-sol[i]
+        
+        Xprime = sol[i+1]+secant
+        def G(X2,g=g,secant=secant,Xprime=Xprime):#takes 2 previous values to guess new 
+            par=X2[-1]
+            dot=np.dot(secant,X2-Xprime)
+            feval= f(X2[:-1],par)
+            
+            g[0]=dot
+            for i in range(len(feval)):
+                g[1+i]=feval[i]
+            #g=np.array(g).flatten()
+            return g
+        soli=solver(G,sol[i+1])
+        
         
         if soli is None:
             print("\n\n\nSolver cant find solution at")
@@ -210,11 +218,10 @@ def arclengthcountinuation(f,X0,X1,parrange,step_size=0.01, solver=fsolve,chaoti
             print(sol[i])
             print(par[i])
             return np.array(sol)
-        soli=soli[:shape[0]]
-        sol[i+2]=soli
-        assert np.shape(soli)==shape
         
-        """if i % 8 == 0 and i > 8:
+        sol[i+2]=soli
+        #assert np.shape(soli)==shape
+        """if not chaoticthreshold is None and i % 8 == 0 and i > 8:
             #if avg < chaoticthreshold*(np.sum(abs(sol[i+1]-sol[i+2]))):
             if np.sum(abs(sol[i+1]-sol[i+2]))>abs(chaoticthreshold*step_size):#using sum instead of a more common norm to avoid the square root
                 print("\n\n\n\nstoping countinuation at")
@@ -222,9 +229,9 @@ def arclengthcountinuation(f,X0,X1,parrange,step_size=0.01, solver=fsolve,chaoti
                 print(soli)
                 print(np.shape(sol[i]))
                 print()
-                return np.array(sol)#[0:i]"""
+                return np.array(sol)"""
         #avg=approxRollingAverage(avg,np.sum(abs(sol[i+1]-sol[i+2])))
-    print(np.shape(sol))   
+       
     return np.array(sol)
 
 def approxRollingAverage (avg, new_sample,N=4):
@@ -236,8 +243,8 @@ def approxRollingAverage (avg, new_sample,N=4):
 
 def hopf(U,param=1):
     b=param
-    du1=b*U[0]-U[1]+U[0]*(U[0]**2+U[1]**2)-U[0]*(U[0]**2+U[1]**2)**2
-    du2=U[0]+b*U[1]+U[1]*(U[0]**2+U[1]**2)-U[1]*(U[0]**2+U[1]**2)**2
+    du1=b*U[0]-U[1]+U[0]*(U[0]**2+U[1]**2)-U[0]*(U[0]**2+U[1]**2)**2+1
+    du2=U[0]+b*U[1]+U[1]*(U[0]**2+U[1]**2)-U[1]*(U[0]**2+U[1]**2)**2-1
     return np.array([du1,du2])
 
 
@@ -249,23 +256,8 @@ def alreadygotsol(sol,sols,relsolsamtol=1e-06):
         if np.allclose(sol,i,rtol=relsolsamtol,atol=0.1):
             return True
     return False
-def findroot(f,X0,methods=('hybr', 'lm'),args=None):
-    if args !=None:
-        print(type(args))
-        for  i in range(len(methods)):
-            sol = root(f, X0, method=methods[i], args=args)
-            if sol.success:
-                return sol.x
-        print('No solution found with current method selection')
-        return None
-    else:
-        for  i in range(len(methods)):
-            sol = root(f, X0, method=methods[i])
-            if sol.success:
-                return sol.x
-        print('No solution found with current method selection')
-        return None
-def getallsolutions(f,domain,params=0,checks=10,numsolutions=None,solver=findroot,relsolsamtol=0.1):
+
+def getallsolutions(f,domain,params=0,checks=100,numsolutions=None,solver=findroot,relsolsamtol=0.1):
     #domain has 2 values for each dimension of fs input
     
     ranges=[]
@@ -303,10 +295,8 @@ def addt(f,args):
     return fwitht
 
 
-def findcycle(func,X,t0=0,period=None,phasecond=lambda  y : y[1],args=()):
+def findcycle(func,X,t0=0,period=None,phasecond=lambda  y : y[1],args=()):#numerical shooting
     print("infindcycle")
-    
-    
     if not list(signature(func).parameters)[0] in ["t","T","Time","time"]:
         f=addt(func,args)#adds dummy t dependence to function so solvivp wont complain
     else:
@@ -352,17 +342,18 @@ def remove_duplicates(item_list):
     return singles_list
 
 
-def getbifdiagram(f,xrange,prange ,stepssize=0.0001,numstartingpoints=3,plot=True,chaoticthresh = 1200,solver=findroot):
+def getbifdiagram(f,xrange,prange ,stepssize=0.01,numstartingpoints=4,plot=True,chaoticthresh = 1200,solver=findroot):
+    #numstarting point is number of arc lengthcontinuation starting points per 
     sols = getallsolutions(f,xrange,params=prange[0],numsolutions=numstartingpoints,solver=solver)#find set of solutions numsolutions None = find as many as it can
     sols2=[]
     for i in sols:
-        sols2.append(fsolve(f,i,args=(prange[0]+stepssize)))#finds second solution for each starting point
+        sols2.append(solver(f,i,args=(prange[0]+stepssize)))#finds second solution for each starting point
 
     solsb = getallsolutions(f,xrange,params=prange[1],numsolutions=numstartingpoints,solver=solver)#do the same from the other side of the domain
     #do same but starting on other end of domain
     sols2b=[]
     for i in solsb:
-        sols2b.append(fsolve(f,i,args=(prange[1]-stepssize)))
+        sols2b.append(solver(f,i,args=(prange[1]-stepssize)))
 
     #sols is solutions with first parameter value
     #sols2 is solutions with second parameter value
@@ -387,11 +378,20 @@ def getbifdiagram(f,xrange,prange ,stepssize=0.0001,numstartingpoints=3,plot=Tru
     for i in range(len(solsb)):
         solcombinationsb.append([solsb[i],sols2b[i]])#combinations of points used for coming from back of domain
     asol=[]
-
+    psol=[]
     for i in solcombinations:
-        asol.append(arclengthcountinuation(f,i[0],i[1],prange,step_size=stepssize,chaoticthreshold=chaoticthresh,solver=solver)) #forwards pass
+        A=arclengthcountinuation(f,i[0],i[1],prange,step_size=stepssize,chaoticthreshold=chaoticthresh,solver=solver)#forwards pass
+        asol.append(A) 
+        #psol.append(A[-1])
     for j in solcombinationsb:
-        asol.append(np.flip(arclengthcountinuation(f,j[0],j[1],np.flip(prange),step_size=-stepssize,chaoticthreshold=chaoticthresh,solver=solver)))#back wards pass
+        A=arclengthcountinuation(f,j[0],j[1],np.flip(prange),step_size=-stepssize,chaoticthreshold=chaoticthresh,solver=solver)#backwards pass
+        print(np.shape(A))
+        p=np.flip(A[:,-1])
+        a=np.flip(A[:,:-1])
+        A=[*a,p]
+        print(np.shape(A))
+        #psol.append(np.flip(A[-1]))
+        #asol.append(np.flip(arclengthcountinuation(f,j[0],j[1],np.flip(prange),step_size=-stepssize,chaoticthreshold=chaoticthresh,solver=solver)))#back wards pass
     
     #plotting
     if plot:
@@ -399,53 +399,54 @@ def getbifdiagram(f,xrange,prange ,stepssize=0.0001,numstartingpoints=3,plot=Tru
         fig, axs = plt.subplots(*figureshape)
         fig.set_figheight(14)
         fig.set_figwidth(19)
-        max_steps = abs(int((prange[1]-prange[0])/stepssize))
-        xvals = np.linspace(*prange, max_steps)
+        
+        #fvals[-1] = parameter values 
+        #asol=asol.T
         for fvals in asol:
-            axs.flatten()[0].plot(xvals,fvals)
-            axs.flatten()[1].plot(fvals[:,0],fvals[:,1])
-            axs.flatten()[2].scatter(xvals,fvals[:,0],fvals[:,1])
-            axs.flatten()[3].scatter(fvals[:,0],fvals[:,1])
+            #axs.flatten()[0].plot(xvals,*fvals.T)
+            axs.flatten()[0].plot(fvals)
+            axs.flatten()[1].plot(fvals[:,-1],fvals[:,0])
+            axs.flatten()[1].plot(fvals[:,-1],fvals[:,1])
+            axs.flatten()[2].scatter(fvals[:,0],fvals[:,1])
+            axs.flatten()[3].scatter(fvals[:,-1],fvals[:,1])
+            axs.flatten()[3].scatter(fvals[:,-1],fvals[:,0])
+            
+            """axs.flatten()[0].plot(fvals[0,:],fvals[1,:])
+            axs.flatten()[1].plot(fvals[-1,:],fvals[0,:],fvals[1,:])
+            axs.flatten()[2].scatter(fvals[-1,:],fvals[0,:])
+            axs.flatten()[3].scatter(fvals[-1,:],fvals[1,:])"""
         for i in axs.flatten():
             i.grid()
         plt.show()
-    return xvals,fvals
+    return fvals
 
 
 
 
 if __name__ == "__main__":
-    hopft= addt(hopf,(99,))
-    c=findcycle(hopf,(5,0,1),args=(99,))
+    getbifdiagram(drdt,[[-40,40],[-40,40]],(1,24))
+    """x0=findroot(poly,9,args=-4)
+    x1=findroot(poly,9,args=-3.99)
     
-    print("solveivp")
-    print(hopf)
+    print(x0)
+    print(x1)
+    A=arclengthcountinuation(poly,x0,x1,parrange=(-4,4),step_size=0.01)
+    parrange=(0,15)
+    step_size=0.01
+    max_steps = int((parrange[1]-parrange[0])/step_size)
     
-    sol=solve_ivp(hopft,(0,c[0]),c[1:],args=(99,))
+   
+    par=np.linspace(parrange[0],parrange[1],max_steps)
+    print("first 30 a")
+    print(A[:30])
     
-    figureshape =(1,3)
-    #fig, axs = plt.subplots(*figureshape)
-    fig=plt.figure(figsize=(12, 6))
-    ax1 = plt.subplot(2,2,1)
-    ax2 = plt.subplot(2,2,2)
-    ax3 = plt.subplot(2,1,2)
-    axs=[ax1,ax2,ax3]
-    axs[2].plot(*sol.y)
-    axs[1].plot(sol.t,sol.y[0])
-    axs[0].plot(sol.t,sol.y[1])
-    axs[2].title.set_text("State variables")
-    axs[1].title.set_text("State variable 1 against T")
-    axs[0].title.set_text("State variable 2 against T")
-    for i in axs:
-            i.grid()
-    fig.suptitle("Hopf bifurcation Limit cycle at b=99")
+    print(np.shape(A))
+    figureshape =(3,1)
+    fig, axs = plt.subplots(*figureshape)
+    axs[0].plot(A[:,0],A[:,1])
+    axs[1].plot(A)
+    A=A.T
+    axs[2].plot(A[:,0],A[:,1])
     plt.show()
-    #print(sol)
-    #x0=fsolve(hopf,(1,0),args=0.1)
-    #x1=fsolve(hopf,(1,0),args=0.2)
-    #print((x1,x0))
-    #A=arclengthcountinuation(hopf,x0,x1,parrange=(0.1,5),step_size=0.1,solver=findcycle)
-    #print(np.shape(A))
-    #plt.plot(A)
-    #plt.show()
+    print(poly(0,param=0))"""
     
