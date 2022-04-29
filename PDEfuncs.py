@@ -459,14 +459,14 @@ def exampleheatsource(x,t,L=L,T=T):
 if __name__ == "__main__":
     xvals = np.linspace(0,L,20)
     tvals = np.linspace(0,T,600)
-    #coords=create2dgrid(0,L,31)
+    coords=create2dgrid(0,L,31)
     #X=backwardseuler(tvals,xvals,u_I)
     #X=forwardeuler(tvals,xvals,u_I)
-    X=CrankNicolson(tvals,xvals,u_I)
+    #X=CrankNicolson(tvals,xvals,u_I)
     #plt.plot(X[1])
     #plt.plot(X[0])
     #plt.show()
-    #X=ADI(tvals,coords,u_I2d)
+    X=ADI(tvals,coords,u_I2d)
     print(np.shape(X))
     temp=[]
     c=0
