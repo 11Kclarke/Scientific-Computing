@@ -1,3 +1,4 @@
+from decimal import setcontext
 from xml import dom
 import numpy as np
 import pylab as pl
@@ -14,13 +15,13 @@ import sys
 
 np.set_printoptions(threshold=np.inf)
 # Set problem parameters/functions
-kappa = 0.4   # diffusion constant
-L=4       # length of spatial domain
-T=40      # total time to solve for
+kappa = 0.01  # diffusion constant
+L=10       # length of spatial domain
+T=10      # total time to solve for
 def u_I(x):
     # initial temperature distribution
     #y = np.sin(pi*x/L)
-    y = np.sin(pi*x)
+    y = np.sin(pi*x/L)*10
     return y
 
 def u_exact(x,t):
@@ -34,7 +35,7 @@ def u_I2d(x):
     return (2*np.sin(np.pi*x[1]/4*L)+2*np.cos(np.pi*x[0]/4*L))
     #if x[0]==0 or x[0]==L:
         #return 5
-    #return 0
+    return 0
 
 
 """
@@ -89,16 +90,20 @@ def TDMAsolver(a, b, c, d):
     return xc
     
 def customreshape(shape,sol):
+    
     solshaped=[]
     L=int(len(sol[0])**(1/2))
     if len(shape)>1:
-        for i in range(len(sol)):
+        for i in range(1,len(sol)-2):
             #i flattened list of spatial stuff at time i
             soli=sol[i].reshape(L,L)
             #solshaped.append(soli)
-            solshaped.append(soli[1:-1,1:-1])
+            solshaped.append(soli[2:-2,2:-2])
         sol=np.array(solshaped)
     return sol
+
+
+
 def setuppde(T,X,innitial):
     print("\npre proccessing started\n")
     X=np.array(X)
@@ -130,19 +135,22 @@ def setuppde(T,X,innitial):
     i=0
     while (X[i+1]-X[i] == 0) or (T[i+1]-T[i] == 0): 
         i+=1
-    lmbda = kappa*(T[i+1]-T[i])/((dims*(X[i+1]-X[i]))**2)
+    lmbda = kappa*(T[i+1]-T[i])/((2*dims*(X[i+1]-X[i]))**2)
     X=temp
-    sqrt = int((2*mx)**1/2)
+    if dims==1:
+        sqrt=mx
+    else:
+        sqrt = int((2*mx)**1/2)
     print("\npre proccessing done\n")
     
     return [T,sol,lmbda,shape,sqrt,X,dims]
 
 
-def forwardeuler(T,X,innitial,boundary=lambda  x,t : 1,Boundarytype=["dir"]):
+def forwardeuler(T,X,innitial,boundary=lambda  x,t : 1,Boundarytype=["dir"]):#2d and 1d but 2d really unstable
 
 
-    [T,sol,lmbda,shape,sqrt,X]=setuppde(T,X,innitial)
-    
+    [T,sol,lmbda,shape,sqrt,X,dims]=setuppde(T,X,innitial)
+    print(sol[0])
     k=1
     d = np.diag([1-2*lmbda]*int(sqrt))
     d1 = np.diag([lmbda]*(int(sqrt)-k),k=k)
@@ -156,12 +164,12 @@ def forwardeuler(T,X,innitial,boundary=lambda  x,t : 1,Boundarytype=["dir"]):
         #mx num of total vals in time window
         #assuming square matrix of side length a 
         #mx = a^2 thus sqrt(2mx) = vals in diag
-        k*=shape[:-1][i]
+        
         d = np.diag([1-2*lmbda]*int(sqrt))
         d1 = np.diag([lmbda]*(int(sqrt)-k),k=k)
         d2 = np.diag([lmbda]*(int(sqrt)-k),k=-k)
         M=d+d1+d2
-        
+        k*=shape[:-1][i]
         
         A.append(M)
 
@@ -170,17 +178,19 @@ def forwardeuler(T,X,innitial,boundary=lambda  x,t : 1,Boundarytype=["dir"]):
     as n*m must be stepped over before beingback in place in first dim 2 dims and same place in 3rd
     idk if this will work for 3d cant visualize it or check results so dont even know if i will test it
     however it makes sense that it would work"""
-    for i in range(1,len(T)):
+    print(T)
+    for i in range(0,len(T)):
+        print(i)
         for M in A:
-            sol[i]+=np.matmul(sol[i-1].flatten(),M)
-        sol[i]+= lmbda*applycond(T[i],sol[i],boundary,X,Boundarytype,lmbda)
-        #sol[i][0]=sol[i][-1]+lmbda*boundary(T[i])[0]
-        #sol[i][-1]=sol[i][-1]+lmbda*boundary(T[i])[1]
+            
+            sol[i]=np.matmul(sol[i-1].flatten(),M)
+            sol[i]= applycond(T[i],sol[i],boundary,X,Boundarytype,lmbda)
+       
     #sol currently flattened spacial dims for each t
     sol=customreshape(shape,sol)
     return sol
 
-def CrankNicolson(T,X,innitial,boundary=lambda  t : (0,0)):
+def CrankNicolson(T,X,innitial,boundary=lambda  x : (0,0)):#1d only
     mx = len(X)
     lmbda = kappa*(T[1]-T[0])/((X[1]-X[0])**2)
     sol = np.zeros(shape=(T.size,X.size))
@@ -207,7 +217,7 @@ def CrankNicolson(T,X,innitial,boundary=lambda  t : (0,0)):
         
     return sol
     
-def backwardseuler(T,X,innitial,boundary=lambda  X,t : 1,Boundarytype=["dir"]):
+def backwardseuler(T,X,innitial,boundary=lambda  X,t : 1,Boundarytype=["dir"]):#2d 4 way symetric, or 1d 
     
     [T,sol,lmbda,shape,sqrt,X,dims]=setuppde(T,X,innitial)
     L=shape[0]
@@ -224,7 +234,7 @@ def backwardseuler(T,X,innitial,boundary=lambda  X,t : 1,Boundarytype=["dir"]):
         for i in range(1,len(T)):
             sol[i-1]= applycond(T[i],sol[i-1],boundary,X,Boundarytype,lmbda)   
             #sol[i]+=(linalg.solve(M, sol[i-1], assume_a='sym'))
-            sol[i]= TDMAsolver(d,side,side,sol[i])
+            sol[i]+= TDMAsolver(side,d,side,sol[i])
     else:  
         for i in range(1,len(T)):
             print(i)
@@ -251,7 +261,9 @@ def backwardseuler(T,X,innitial,boundary=lambda  X,t : 1,Boundarytype=["dir"]):
     sol=customreshape(shape,sol)
     return sol
 
-def ADI(T,X,innitial,boundary=lambda  X,t : 1,Boundarytype=["dir+"]):
+
+    
+def ADI(T,X,innitial,boundary=lambda  X,t : 1,Boundarytype=["dir+"]):#2d only
     
     [T,sol,lmbda,shape,sqrt,X,dims]=setuppde(T,X,innitial)
     dx=X[0][0]-X[1][0]
@@ -274,11 +286,12 @@ def ADI(T,X,innitial,boundary=lambda  X,t : 1,Boundarytype=["dir+"]):
     e=d
     C=B
     """
-    magicnumber=-(2+1/lmbda)
+    magicnumber=-(2+1/lmbda)#explained in detail in writeup
     magicnumber2=2-1/lmbda
     d=np.ones(L) * magicnumber 
     side= np.ones(L-1)
-    tsteps=len(T)-1#
+    tsteps=len(T)-1
+    steplist=list(range(1,L-1))
     #tsteps= int(len(T)/2)#each half step is step
     #sol[0]=applycond(T[0],sol[0],boundary,X,Boundarytype,lmbda)
     
@@ -288,7 +301,7 @@ def ADI(T,X,innitial,boundary=lambda  X,t : 1,Boundarytype=["dir+"]):
         print(t)
         tsol=np.reshape(sol[t],(L,L))
         #loops kept seperate for ease of later expansion
-        for i in range(0,L-1):#Xloop
+        for i in steplist:#Xloop
             xtarr=tsol[i,:]*magicnumber2-(tsol[i-1,:]+tsol[i+1,:])
             #xtarr[0]-=tsol[i,0]
             #xtarr[-1]-=tsol[i,-1]
@@ -298,7 +311,7 @@ def ADI(T,X,innitial,boundary=lambda  X,t : 1,Boundarytype=["dir+"]):
             tsol[i,-1]=b2
             tsol[i,0]=b1
         
-        for j in range(0,L-1):#Yloop#reversed this loops direction
+        for j in steplist:#Yloop#reversed this loops direction
             ytarr=tsol[:,j]*magicnumber2-(tsol[:,j-1]+tsol[:,j+1])
             #ytarr[0]-=tsol[0,j]
             #ytarr[-1]-=tsol[-1,j]
@@ -308,17 +321,19 @@ def ADI(T,X,innitial,boundary=lambda  X,t : 1,Boundarytype=["dir+"]):
             tsol[0,j]=b1
             tsol[-1,j]=b2
         sol[t+1]=tsol.flatten()
-        
+        steplist=np.flip(steplist)    
     sol=customreshape(shape,sol)
     print(L)
     print(np.shape(sol))
     return sol
+
 
 def transposer(A,L):
     A=np.reshape(A,(L,L)).T.flatten()
 
 
 def applycond(t,sol,boundary,X,boundarytype,lmda):
+    
     #applies a function of x and t to either edges of sol, or entire
     """A function used for boundary conditions or heat source should output
      1 temperature for 1 set of coordinates, and time. 
@@ -346,17 +361,17 @@ def applycond(t,sol,boundary,X,boundarytype,lmda):
                 
                 sol[(i)*(sidelength**d)]+=lmda*boundary(X[(i)*(sidelength**d)],t)#close boundary on axis d
                 
-                sol[(-(i)*((sidelength)**d))-1]+=lmda*boundary(X[(-(i)*((sidelength)**d))-1],t)#far boundary on axis d
+                sol[-(i)*((sidelength)**d)-1]+=lmda*boundary(X[(-(i)*((sidelength)**d))-1],t)#far boundary on axis d
     elif "dir" in boundarytype:
         for d in range(dims):
             for i in range(0,sidelength):
                 
                 sol[i*((sidelength)**d)]=lmda*boundary(X[i*((sidelength)**d)],t)#close boundary on axis d
                 
-                sol[(-i*((sidelength)**d))-1]=lmda*boundary(X[(-i*((sidelength)**d))-1],t)#far boundary on axis 
+                sol[-i*((sidelength)**d)-1]=lmda*boundary(X[(-i*((sidelength)**d))-1],t)#far boundary on axis 
     
     if "heatsource" in boundarytype:
-        #print("domain wide application")
+        print("domain wide application")
         for i in range(len(sol)):
             sol[i]+=lmda*boundary(X[i],t) 
     if "periodicy" in boundarytype or "periodicx" in boundarytype:#if periodic with no heat source use func that always gives 0, ie default
@@ -391,7 +406,7 @@ def applycond(t,sol,boundary,X,boundarytype,lmda):
 
 
 def animatepde(X,save=False,path=None):
-    maxtemp=max(X.flatten())/2
+    maxtemp=max(X.flatten())
     mintemp=min(X.flatten())
     if len(np.shape(X[0]))<2:
         
@@ -429,21 +444,28 @@ def animatepde(X,save=False,path=None):
         anim.save(f, writer='imagemagick',fps=30,progress_callback=lambda i, n: print(str(i)+" / "+str(X.shape[0])+" frames "))
     plt.show()
 
+
+
 def exampleheatsource(x,t,L=L,T=T):
     y=x[1]/L
     x=x[0]/L
     if (y>0.1 and y < 0.2) and (x>0.2 and x < 0.8):
-        return 4
+        return -4
     else:
         return 0
         
 if __name__ == "__main__":
-    tvals = np.linspace(0,T,500)
-    coords=create2dgrid(0,L,30)
-    #tvals = np.linspace(0,T,600)
+    xvals = np.linspace(0,L,80)
+    tvals = np.linspace(0,T,600)
     #coords=create2dgrid(0,L,31)
-    X=ADI(tvals,coords,u_I2d,boundary=exampleheatsource,Boundarytype=["periodicy"])
+    #X=backwardseuler(tvals,xvals,u_I)
+    X=forwardeuler(tvals,xvals,u_I)
+    #X=CrankNicolson(tvals,xvals,u_I)
+    plt.plot(X[1])
+    plt.plot(X[0])
+    plt.show()
     #X=ADI(tvals,coords,u_I2d)
+    print(np.shape(X))
     temp=[]
     c=0
     n=2
