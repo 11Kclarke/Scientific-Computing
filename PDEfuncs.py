@@ -190,15 +190,15 @@ def forwardeuler(T,X,innitial,boundary=lambda  x,t : 1,Boundarytype=["dir"]):#2d
     sol=customreshape(shape,sol)
     return sol
 
-def CrankNicolson(T,X,innitial,boundary=lambda  x : (0,0)):#1d only
+def CrankNicolson(T,X,innitial,boundary=lambda  x,t : 1,Boundarytype=["dir+"]):#1d only
     mx = len(X)
     lmbda = kappa*(T[1]-T[0])/((X[1]-X[0])**2)
     sol = np.zeros(shape=(T.size,X.size))
     for i in range(mx):
         sol[0][i] = innitial(X[i])
     
-    sol[0][0]=sol[i][-1]+lmbda*boundary(T[i])[0]
-    sol[0][-1]=sol[i][-1]+lmbda*boundary(T[i])[1]
+    #sol[0][0]=sol[i][-1]+lmbda*boundary(T[i])[0]
+    #sol[0][-1]=sol[i][-1]+lmbda*boundary(T[i])[1]
 
     d = np.diag([1-lmbda]*(mx))
     d1 = np.diag([lmbda/2]*(mx-1),k=1)#diagonals of A
@@ -209,15 +209,15 @@ def CrankNicolson(T,X,innitial,boundary=lambda  x : (0,0)):#1d only
     d1b = np.array([-lmbda/2]*(mx-1))#diagnoals of B
     d2b = np.array([-lmbda/2]*(mx-1))
     for i in range(1,len(T)):
-        
+        sol[i-1]= applycond(T[i],sol[i-1],boundary,X,Boundarytype,lmbda)
         sol[i]=np.matmul(A,sol[i-1])
-        sol[i]=TDMAsolver(d1b,db,d2b,sol[i])
-        sol[i][0]=sol[i][-1]+lmbda*boundary(T[i])[0]
-        sol[i][-1]=sol[i][-1]+lmbda*boundary(T[i])[1]
+        sol[i]=TDMAsolver(d1b,db,d2b,sol[i-1])
+        #sol[i][0]=sol[i][-1]+lmbda*boundary(T[i])[0]
+        #sol[i][-1]=sol[i][-1]+lmbda*boundary(T[i])[1]
         
     return sol
     
-def backwardseuler(T,X,innitial,boundary=lambda  X,t : 1,Boundarytype=["dir"]):#2d 4 way symetric, or 1d 
+def backwardseuler(T,X,innitial,boundary=lambda  X,t : 1,Boundarytype=["dir+"]):#2d 4 way symetric, or 1d 
     
     [T,sol,lmbda,shape,sqrt,X,dims]=setuppde(T,X,innitial)
     L=shape[0]
@@ -459,14 +459,14 @@ def exampleheatsource(x,t,L=L,T=T):
 if __name__ == "__main__":
     xvals = np.linspace(0,L,20)
     tvals = np.linspace(0,T,600)
-    coords=create2dgrid(0,L,31)
+    #coords=create2dgrid(0,L,31)
     #X=backwardseuler(tvals,xvals,u_I)
     #X=forwardeuler(tvals,xvals,u_I)
-    #X=CrankNicolson(tvals,xvals,u_I)
+    X=CrankNicolson(tvals,xvals,u_I)
     #plt.plot(X[1])
     #plt.plot(X[0])
     #plt.show()
-    X=ADI(tvals,coords,u_I2d)
+    #X=ADI(tvals,coords,u_I2d)
     print(np.shape(X))
     temp=[]
     c=0
