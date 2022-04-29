@@ -15,7 +15,7 @@ import sys
 
 np.set_printoptions(threshold=np.inf)
 # Set problem parameters/functions
-kappa = 0.01  # diffusion constant
+kappa = 10  # diffusion constant
 L=10       # length of spatial domain
 T=10      # total time to solve for
 def u_I(x):
@@ -179,7 +179,7 @@ def forwardeuler(T,X,innitial,boundary=lambda  x,t : 1,Boundarytype=["dir"]):#2d
     idk if this will work for 3d cant visualize it or check results so dont even know if i will test it
     however it makes sense that it would work"""
     print(T)
-    for i in range(0,len(T)):
+    for i in range(1,len(T)):
         print(i)
         for M in A:
             
@@ -228,13 +228,13 @@ def backwardseuler(T,X,innitial,boundary=lambda  X,t : 1,Boundarytype=["dir"]):#
     d = np.array([1+2*lmbda]*(sqrt))
     
     #M=d1+d2+d
-    sol[0]= applycond(T[0],sol[0],boundary,X,Boundarytype,lmbda)
+    #sol[0]= applycond(T[0],sol[0],boundary,X,Boundarytype,lmbda)
     if dims==1:
 
         for i in range(1,len(T)):
             sol[i-1]= applycond(T[i],sol[i-1],boundary,X,Boundarytype,lmbda)   
             #sol[i]+=(linalg.solve(M, sol[i-1], assume_a='sym'))
-            sol[i]+= TDMAsolver(side,d,side,sol[i])
+            sol[i]= TDMAsolver(side,d,side,sol[i-1])
     else:  
         for i in range(1,len(T)):
             print(i)
@@ -341,6 +341,8 @@ def applycond(t,sol,boundary,X,boundarytype,lmda):
       and the time given as second positional argument."""
     dims= X.ndim
     sidelength = int(len(sol)**(1/dims))
+    if dims==1:
+        sidelength=1
     sol=sol.flatten()
     #2boundaries per dim
     """
@@ -455,16 +457,16 @@ def exampleheatsource(x,t,L=L,T=T):
         return 0
         
 if __name__ == "__main__":
-    xvals = np.linspace(0,L,80)
+    xvals = np.linspace(0,L,20)
     tvals = np.linspace(0,T,600)
-    #coords=create2dgrid(0,L,31)
+    coords=create2dgrid(0,L,31)
     #X=backwardseuler(tvals,xvals,u_I)
-    X=forwardeuler(tvals,xvals,u_I)
+    #X=forwardeuler(tvals,xvals,u_I)
     #X=CrankNicolson(tvals,xvals,u_I)
-    plt.plot(X[1])
-    plt.plot(X[0])
-    plt.show()
-    #X=ADI(tvals,coords,u_I2d)
+    #plt.plot(X[1])
+    #plt.plot(X[0])
+    #plt.show()
+    X=ADI(tvals,coords,u_I2d)
     print(np.shape(X))
     temp=[]
     c=0
@@ -477,7 +479,7 @@ if __name__ == "__main__":
             n+=1
     X=np.array(temp)
     
-    animatepde(X,save=False)#[:,1:dx,1:dx]
+    animatepde(X,save=False)
     
     plt.show()
 

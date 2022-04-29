@@ -1,4 +1,3 @@
 ODE func contains all ode solvers shooting and continuation
-pde-funcs1d old version of pde solvers contains all of 1d pde solvers
-PDEfuncs contains 2d solvers, and recently discovered to be broken broken 1d solvers.
-	 
+
+PDEfuncs contains 2d solvers
